@@ -123,6 +123,12 @@
           "default": "warn",
           "description": "Action when structural validation of a generated diff file fails."
         },
+        "xmlDiffAndPatch.pathPrefix": {
+          "type": "string",
+          "default": "",
+          "description": "Sub-path inserted between originalFolder and the file's relative path when looking up the original file (e.g. 'libraries' or 'assets/libs').",
+          "scope": "resource"
+        },
         "xmlDiffAndPatch.debug": {
           "type": "boolean",
           "default": false,

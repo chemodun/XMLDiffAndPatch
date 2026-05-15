@@ -192,7 +192,10 @@ export class WatcherManager {
     // pathPrefix is inserted between originalFolder and the file's relative path
     // so the original can live in a sub-tree that differs from the mod layout.
     // The prefix is NOT applied to the output (diff / patch / copy) path.
-    const originalPath = path.join(config.originalFolder, config.pathPrefix, relPath);
+    // An empty pathPrefix is treated as "no prefix" — never normalised to '.'.
+    const originalPath = config.pathPrefix
+      ? path.join(config.originalFolder, config.pathPrefix, relPath)
+      : path.join(config.originalFolder, relPath);
     const originalExists = fsSync.existsSync(originalPath);
     this.logger.debug(
       `processFile: source=${source} isXml=${isXml} relPath='${relPath}'` +
