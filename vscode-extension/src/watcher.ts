@@ -155,7 +155,10 @@ export class WatcherManager {
   ): Promise<void> {
     const { config } = this;
     const isXml = path.extname(savedPath).toLowerCase() === '.xml';
-    const originalPath = path.join(config.originalFolder, relPath);
+    // pathPrefix is inserted between originalFolder and the file's relative path
+    // so the original can live in a sub-tree that differs from the mod layout.
+    // The prefix is NOT applied to the output (diff / patch / copy) path.
+    const originalPath = path.join(config.originalFolder, config.pathPrefix, relPath);
     const originalExists = fsSync.existsSync(originalPath);
 
     // Determine output folder and operation

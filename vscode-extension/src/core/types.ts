@@ -27,6 +27,13 @@ export interface WatcherConfig {
   allowDoubles: boolean;
   watchMode: 'onSave' | 'onTheFly';
   debounceMs: number;
+  /**
+   * Path segment prepended to the file's relative path when looking up the
+   * original file.  Only used to locate originals — never applied to the
+   * output (diff / patch / copy destination) path.
+   * Empty string means no prefix.
+   */
+  pathPrefix: string;
   /** Human-readable label for log messages (e.g. "folder:MyMod" or "disk:/path/x4diffandpatch.json"). */
   configLabel: string;
   /** Where this configuration was read from. */

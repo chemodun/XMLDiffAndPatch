@@ -46,6 +46,12 @@ export interface DiskConfigFile {
   allowDoubles?: boolean;
   watchMode?: 'onSave' | 'onTheFly';
   debounceMs?: number;
+  /**
+   * Path segment prepended to the file's relative path when locating the
+   * original file.  Not applied to the output path.  Only honoured for
+   * disk config files; ignored for VS Code settings.
+   */
+  pathPrefix?: string;
 }
 
 // ─── Settings keys that trigger per-folder activation ────────────────────────
@@ -282,6 +288,7 @@ function buildConfig(
     allowDoubles: data.allowDoubles ?? false,
     watchMode: data.watchMode ?? 'onSave',
     debounceMs: data.debounceMs ?? 500,
+    pathPrefix: data.pathPrefix ?? '',
     configLabel: label,
     configSource: source,
   };
