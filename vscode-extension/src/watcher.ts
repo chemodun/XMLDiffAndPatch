@@ -22,6 +22,25 @@ import { detectIndentation, ELEMENT_NODE } from './core/xmlUtils.js';
 import { serializeDocument } from './core/xmlSerializer.js';
 import type { StatusBarManager } from './statusBar.js';
 
+/** Recursively collects absolute paths of all .xml files under `dir`. */
+async function walkXmlFiles(dir: string): Promise<string[]> {
+  const results: string[] = [];
+  try {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        results.push(...(await walkXmlFiles(fullPath)));
+      } else if (entry.name.toLowerCase().endsWith('.xml')) {
+        results.push(fullPath);
+      }
+    }
+  } catch {
+    // unreadable directory — skip
+  }
+  return results;
+}
+
 /** Returns true when the diff Document root has no child operation elements. */
 function isDiffEmpty(doc: Document): boolean {
   const root = doc.documentElement;
@@ -564,6 +583,39 @@ export class WatcherManager {
     const diffPath = path.join(this.config.diffFolder, relPath);
     await this.writeDiff(originalPath, modifiedPath, diffPath);
     return true;
+  }
+
+  /** Deletes diff files that have no corresponding file in the modified folder (orphan cleanup).
+   * `modifiedRelDir` is the selected folder's path relative to modifiedFolder
+   * (empty string = the entire modified folder). */
+  async runCleanOrphanDiffs(modifiedRelDir: string): Promise<number> {
+    const diffSubdir = modifiedRelDir
+      ? path.join(this.config.diffFolder, modifiedRelDir)
+      : this.config.diffFolder;
+
+    if (!fsSync.existsSync(diffSubdir)) {
+      return 0;
+    }
+
+    const diffFiles = await walkXmlFiles(diffSubdir);
+    let deleted = 0;
+
+    for (const diffFilePath of diffFiles) {
+      const relInDiffFolder = path.relative(this.config.diffFolder, diffFilePath);
+      const modifiedFilePath = path.join(this.config.modifiedFolder, relInDiffFolder);
+
+      if (!fsSync.existsSync(modifiedFilePath)) {
+        try {
+          await fs.unlink(diffFilePath);
+          this.logger.info(`[CleanOrphans] Deleted orphan diff '${relInDiffFolder}'`);
+          deleted++;
+        } catch (err) {
+          this.logger.warn(`[CleanOrphans] Failed to delete '${relInDiffFolder}': ${err}`);
+        }
+      }
+    }
+
+    return deleted;
   }
 
   // ─── Disposal ─────────────────────────────────────────────────────────────

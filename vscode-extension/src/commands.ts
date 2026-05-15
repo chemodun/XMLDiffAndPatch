@@ -17,10 +17,13 @@ import type { WatcherManager } from './watcher.js';
 
 type Operation = 'resetToOriginal' | 'reconstructFromDiff' | 'regenerateDiff';
 
-const REQUIRED_ROLE: Record<Operation, 'modified' | 'diff'> = {
+const REQUIRED_ROLE: Record<Operation, 'modified' | 'diff' | null> = {
   resetToOriginal: 'modified',
   reconstructFromDiff: 'modified',
-  regenerateDiff: 'diff',
+  // regenerateDiff accepts both roles: diff-folder selection regenerates existing
+  // diffs; modified-folder selection regenerates from the modified files and also
+  // removes orphan diff files that have no counterpart in the modified folder.
+  regenerateDiff: null,
 };
 
 const OP_TITLE: Record<Operation, string> = {
@@ -61,13 +64,32 @@ async function executeOperation(
   rawUris: vscode.Uri[],
   getWatchers: () => WatcherManager[]
 ): Promise<void> {
-  // Expand selection to individual XML files
+  const watchers = getWatchers();
   const allFiles: vscode.Uri[] = [];
+  // For regenerateDiff on a modified-role folder: track for orphan diff cleanup.
+  const orphanTargets: Array<{ watcher: WatcherManager; relDir: string }> = [];
+
   for (const uri of rawUris) {
+    let isDir = false;
+    try {
+      const stat = await vscode.workspace.fs.stat(uri);
+      isDir = !!(stat.type & vscode.FileType.Directory);
+    } catch { /* unreadable — skip */ }
+
     allFiles.push(...(await collectXmlUris(uri)));
+
+    if (isDir && op === 'regenerateDiff') {
+      for (const watcher of watchers) {
+        const roleInfo = watcher.getFileRole(uri.fsPath);
+        if (roleInfo?.role === 'modified') {
+          orphanTargets.push({ watcher, relDir: roleInfo.relPath });
+          break;
+        }
+      }
+    }
   }
 
-  if (allFiles.length === 0) {
+  if (allFiles.length === 0 && orphanTargets.length === 0) {
     vscode.window.showInformationMessage(
       'X4 Diff and Patch: No XML files found in the selection.'
     );
@@ -85,21 +107,19 @@ async function executeOperation(
     async (progress) => {
       let processed = 0;
       let skipped = 0;
-      const watchers = getWatchers();
+      const fileIncrement = orphanTargets.length > 0 ? 85 / Math.max(allFiles.length, 1) : 100 / Math.max(allFiles.length, 1);
 
-      for (let i = 0; i < allFiles.length; i++) {
-        const fileUri = allFiles[i];
+      for (const fileUri of allFiles) {
         progress.report({
           message: path.basename(fileUri.fsPath),
-          increment: 100 / allFiles.length,
+          increment: fileIncrement,
         });
 
         let handled = false;
         for (const watcher of watchers) {
           const roleInfo = watcher.getFileRole(fileUri.fsPath);
-          if (!roleInfo || roleInfo.role !== requiredRole) {
-            continue;
-          }
+          if (!roleInfo) continue;
+          if (requiredRole !== null && roleInfo.role !== requiredRole) continue;
 
           let ok = false;
           if (op === 'resetToOriginal') {
@@ -116,17 +136,28 @@ async function executeOperation(
           break; // first matching watcher wins
         }
 
-        if (!handled) {
-          skipped++;
+        if (!handled) skipped++;
+      }
+
+      // Orphan cleanup: delete diff files with no corresponding modified file.
+      let orphansDeleted = 0;
+      if (orphanTargets.length > 0) {
+        progress.report({ message: 'Cleaning orphan diffs…', increment: 15 });
+        for (const { watcher, relDir } of orphanTargets) {
+          orphansDeleted += await watcher.runCleanOrphanDiffs(relDir);
         }
       }
 
-      const msg =
-        processed === 0 && skipped > 0
-          ? `X4 Diff and Patch: No applicable files found (${skipped} skipped).`
-          : `X4 Diff and Patch: ${processed} file(s) processed` +
-            (skipped > 0 ? `, ${skipped} skipped` : '') +
-            '.';
+      const parts: string[] = [];
+      if (allFiles.length > 0) {
+        parts.push(`${processed} file(s) processed`);
+        if (skipped > 0) parts.push(`${skipped} skipped`);
+      }
+      if (orphansDeleted > 0) parts.push(`${orphansDeleted} orphan diff(s) deleted`);
+
+      const msg = parts.length > 0
+        ? `X4 Diff and Patch: ${parts.join(', ')}.`
+        : 'X4 Diff and Patch: No applicable files found.';
       vscode.window.showInformationMessage(msg);
     }
   );
