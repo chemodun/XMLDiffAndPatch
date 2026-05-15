@@ -1,9 +1,0 @@
-{
-  "folders": [
-    { "path": "." }
-  ],
-  "settings": {
-    "xmlDiffAndPatch.mainFolderRole": "modified",
-    "xmlDiffAndPatch.diffFolder": "diff"
-  }
-}
