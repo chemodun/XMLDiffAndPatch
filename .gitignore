@@ -10,4 +10,4 @@ temp/
 *.ps1
 docs/video
 releases
-test-workspace/**/*.xml
+test-workspace/
