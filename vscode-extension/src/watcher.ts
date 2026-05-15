@@ -30,12 +30,13 @@ function getRelativePath(filePath: string, folder: string): string | null {
   return rel;
 }
 
-/** Creates an output-channel-backed Logger. */
-function makeLogger(channel: vscode.OutputChannel): Logger {
+/** Creates an output-channel-backed Logger, prefixing every message with the config label. */
+function makeLogger(channel: vscode.OutputChannel, label: string): Logger {
+  const tag = `[${label}]`;
   return {
-    info: (msg) => channel.appendLine(`[INFO]  ${msg}`),
-    warn: (msg) => channel.appendLine(`[WARN]  ${msg}`),
-    error: (msg) => channel.appendLine(`[ERROR] ${msg}`),
+    info: (msg) => channel.appendLine(`[INFO]  ${tag} ${msg}`),
+    warn: (msg) => channel.appendLine(`[WARN]  ${tag} ${msg}`),
+    error: (msg) => channel.appendLine(`[ERROR] ${tag} ${msg}`),
   };
 }
 
@@ -55,7 +56,7 @@ export class WatcherManager {
     private readonly outputChannel: vscode.OutputChannel,
     private readonly statusBar: StatusBarManager
   ) {
-    this.logger = makeLogger(outputChannel);
+    this.logger = makeLogger(outputChannel, config.configLabel);
   }
 
   // ─── Setup ────────────────────────────────────────────────────────────────

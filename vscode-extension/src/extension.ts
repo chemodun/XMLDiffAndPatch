@@ -2,20 +2,23 @@
  * Extension entry point.
  *
  * Wires together config reading, validation, watcher setup, status bar,
- * and output channel.  Re-initialises when workspace settings change.
+ * and output channel.  Supports multiple independent watcher instances —
+ * one per workspace folder or on-disk config file.  Re-initialises when
+ * VS Code settings change or an `x4diffandpatch.json` file is created,
+ * modified, or deleted anywhere in the workspace.
  */
 import * as vscode from 'vscode';
-import { readConfig } from './config.js';
+import { readAllConfigs, DISK_CONFIG_FILENAME } from './config.js';
 import { WatcherManager } from './watcher.js';
 import { StatusBarManager } from './statusBar.js';
 
 let outputChannel: vscode.OutputChannel;
 let statusBar: StatusBarManager;
-let watcher: WatcherManager | null = null;
+let watchers: WatcherManager[] = [];
 
 // ─── Activate ─────────────────────────────────────────────────────────────────
 
-export function activate(context: vscode.ExtensionContext): void {
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
   outputChannel = vscode.window.createOutputChannel('X4 Diff and Patch');
   statusBar = new StatusBarManager();
 
@@ -29,48 +32,69 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   // Initial setup
-  initialise();
+  await initialise();
 
-  // Re-initialise when the user changes settings
+  // Re-initialise when the user changes VS Code settings
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('xmlDiffAndPatch')) {
         outputChannel.appendLine('[INFO]  Configuration changed — reinitialising…');
-        initialise();
+        void initialise();
       }
     })
   );
+
+  // Re-initialise when any x4diffandpatch.json is created, changed, or deleted
+  const cfgFileWatcher = vscode.workspace.createFileSystemWatcher(
+    `**/${DISK_CONFIG_FILENAME}`
+  );
+  const reinitFromFile = () => {
+    outputChannel.appendLine('[INFO]  Config file changed — reinitialising…');
+    void initialise();
+  };
+  cfgFileWatcher.onDidChange(reinitFromFile);
+  cfgFileWatcher.onDidCreate(reinitFromFile);
+  cfgFileWatcher.onDidDelete(reinitFromFile);
+  context.subscriptions.push(cfgFileWatcher);
 }
 
 // ─── Deactivate ───────────────────────────────────────────────────────────────
 
 export function deactivate(): void {
-  watcher?.dispose();
-  watcher = null;
+  disposeWatchers();
 }
 
 // ─── Initialise ───────────────────────────────────────────────────────────────
 
-function initialise(): void {
-  // Tear down any previous watcher
-  watcher?.dispose();
-  watcher = null;
+async function initialise(): Promise<void> {
+  disposeWatchers();
 
-  const config = readConfig(outputChannel);
+  const configs = await readAllConfigs(outputChannel);
 
-  if (!config) {
-    statusBar.setState('error', 'X4 Diff+Patch: configuration error — click to view output');
+  if (configs.length === 0) {
+    statusBar.setState('error', 'X4 Diff+Patch: not configured — click to view output');
     return;
   }
 
-  outputChannel.appendLine(
-    `[INFO]  Starting with mainFolderRole='${config.mainFolderRole}', watchMode='${config.watchMode}'`
-  );
-  outputChannel.appendLine(`[INFO]  originalFolder : ${config.originalFolder}`);
-  outputChannel.appendLine(`[INFO]  modifiedFolder : ${config.modifiedFolder}`);
-  outputChannel.appendLine(`[INFO]  diffFolder     : ${config.diffFolder}`);
+  for (const config of configs) {
+    outputChannel.appendLine(`[INFO]  ─── [${config.configLabel}] (${config.configSource}) ───`);
+    outputChannel.appendLine(`[INFO]    role     : ${config.mainFolderRole} | mode: ${config.watchMode}`);
+    outputChannel.appendLine(`[INFO]    original : ${config.originalFolder}`);
+    outputChannel.appendLine(`[INFO]    modified : ${config.modifiedFolder}`);
+    outputChannel.appendLine(`[INFO]    diff     : ${config.diffFolder}`);
 
-  watcher = new WatcherManager(config, outputChannel, statusBar);
-  watcher.setup();
+    const w = new WatcherManager(config, outputChannel, statusBar);
+    w.setup();
+    watchers.push(w);
+  }
+
   statusBar.setState('active');
 }
+
+function disposeWatchers(): void {
+  for (const w of watchers) {
+    w.dispose();
+  }
+  watchers = [];
+}
+

@@ -10,7 +10,7 @@ export interface DiffOptions {
   ignoreDiffInAttribute: string | null;
 }
 
-/** Resolved and validated watcher configuration (derived from VS Code settings). */
+/** Resolved and validated watcher configuration (derived from VS Code settings or disk file). */
 export interface WatcherConfig {
   originalFolder: string;
   mainFolderRole: 'modified' | 'diff';
@@ -27,6 +27,10 @@ export interface WatcherConfig {
   allowDoubles: boolean;
   watchMode: 'onSave' | 'onTheFly';
   debounceMs: number;
+  /** Human-readable label for log messages (e.g. "folder:MyMod" or "disk:/path/x4diffandpatch.json"). */
+  configLabel: string;
+  /** Where this configuration was read from. */
+  configSource: 'vscode-folder' | 'disk-file' | 'vscode-global';
 }
 
 /** Minimal logging interface used by the engine layer. */
