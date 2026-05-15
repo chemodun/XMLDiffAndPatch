@@ -1,0 +1,122 @@
+{
+  "name": "x4diffandpatch",
+  "displayName": "X4DiffAndPatch",
+  "description": "Automatically generates X4-compatible XML diffs and applies XML patches on file save.",
+  "version": "0.1.0",
+  "publisher": "X4DevTools",
+  "author": {
+    "name": "Chem O'Dun",
+    "email": "chemodun@gmail.com"
+  },
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "X4 Diff and Patch",
+      "properties": {
+        "xmlDiffAndPatch.originalFolder": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the folder containing the original (vanilla/baseline) XML files. Always required."
+        },
+        "xmlDiffAndPatch.mainFolderRole": {
+          "type": "string",
+          "enum": ["modified", "diff"],
+          "enumDescriptions": [
+            "The main watched folder holds modified XML files; diffs are generated into diffFolder.",
+            "The main watched folder holds diff XML files; patches are applied into modifiedFolder."
+          ],
+          "default": "modified",
+          "description": "Role of the primary watched folder."
+        },
+        "xmlDiffAndPatch.modifiedFolder": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the folder that holds modified (patched) XML files. When mainFolderRole=modified this IS the main watched folder."
+        },
+        "xmlDiffAndPatch.diffFolder": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the folder that holds diff XML files. When mainFolderRole=diff this IS the main watched folder."
+        },
+        "xmlDiffAndPatch.xsdPath": {
+          "type": "string",
+          "default": "./diff.xsd",
+          "description": "Path to diff.xsd for output validation. Relative paths resolve from workspace root."
+        },
+        "xmlDiffAndPatch.onlyFullPath": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, always generate full absolute XPath (no // shorthand)."
+        },
+        "xmlDiffAndPatch.useAllAttributes": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, include all attributes in XPath predicates regardless of uniqueness."
+        },
+        "xmlDiffAndPatch.ignoreDiffInAttribute": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Attribute name to ignore when comparing elements (e.g. 'version'). null = no attribute ignored."
+        },
+        "xmlDiffAndPatch.reflectToMainFolder": {
+          "type": "boolean",
+          "default": true,
+          "description": "If true (default), saves in the secondary folder are reflected back to the main folder."
+        },
+        "xmlDiffAndPatch.passOtherFiles": {
+          "type": "boolean",
+          "default": true,
+          "description": "If true (default), files not found in originalFolder by relative path are copied as-is to the output folder."
+        },
+        "xmlDiffAndPatch.showDiffEditorOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, open a side-by-side diff editor after generating a diff file. (v0.2 feature)"
+        },
+        "xmlDiffAndPatch.allowDoubles": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, skip duplicate-element guard when applying <add> operations during patch."
+        },
+        "xmlDiffAndPatch.watchMode": {
+          "type": "string",
+          "enum": ["onSave", "onTheFly"],
+          "enumDescriptions": [
+            "Trigger processing only on explicit VS Code save (Ctrl+S).",
+            "Trigger processing on any file-system change, with debounce."
+          ],
+          "default": "onSave",
+          "description": "When to trigger diff/patch processing."
+        },
+        "xmlDiffAndPatch.debounceMs": {
+          "type": "number",
+          "default": 500,
+          "minimum": 50,
+          "description": "Debounce delay in milliseconds for 'onTheFly' watch mode."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "node esbuild.js --production",
+    "compile": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "@xmldom/xmldom": "^0.9.5",
+    "xpath": "^0.0.34"
+  }
+}
