@@ -32,6 +32,20 @@ function isDiffEmpty(doc: Document): boolean {
   return true;
 }
 
+/**
+ * Returns true when @xmldom/xmldom inserted a <parsererror> element, which
+ * indicates the source XML was malformed and could not be fully parsed.
+ */
+function hasParseError(doc: Document): boolean {
+  const root = doc.documentElement;
+  if (!root) return true;
+  if (root.nodeName === 'parsererror') return true;
+  for (let child = root.firstChild; child; child = child.nextSibling) {
+    if (child.nodeName === 'parsererror') return true;
+  }
+  return false;
+}
+
 /** Returns the path relative to `folder`, or null if the file is not under it. */
 function getRelativePath(filePath: string, folder: string): string | null {
   const rel = path.relative(folder, filePath);
@@ -256,6 +270,11 @@ export class WatcherManager {
     const originalDoc = this.parser.parseFromString(origContent, 'text/xml');
     const modifiedDoc = this.parser.parseFromString(modContent, 'text/xml');
 
+    if (hasParseError(modifiedDoc)) {
+      this.logger.warn(`[Diff] Skipped: XML is malformed in '${modifiedPath}'`);
+      return;
+    }
+
     const diffOptions = {
       onlyFullPath: this.config.onlyFullPath,
       useAllAttributes: this.config.useAllAttributes,
@@ -321,6 +340,11 @@ export class WatcherManager {
 
     const originalDoc = this.parser.parseFromString(origContent, 'text/xml');
     const diffDoc = this.parser.parseFromString(diffContent, 'text/xml');
+
+    if (hasParseError(diffDoc)) {
+      this.logger.warn(`[Patch] Skipped: XML is malformed in '${diffPath}'`);
+      return;
+    }
 
     applyPatch(diffDoc, originalDoc, this.config.allowDoubles, this.logger);
 
