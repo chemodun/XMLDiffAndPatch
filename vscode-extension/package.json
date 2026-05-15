@@ -99,6 +99,29 @@
           "default": 500,
           "minimum": 50,
           "description": "Debounce delay in milliseconds for 'onTheFly' watch mode."
+        },
+        "xmlDiffAndPatch.emptyDiffBehavior": {
+          "type": "string",
+          "enum": ["write", "skip", "delete", "warn"],
+          "enumDescriptions": [
+            "Write the empty diff file to the output folder.",
+            "Do not write anything (silent skip).",
+            "Delete the output file if it already exists.",
+            "Log a warning and skip writing."
+          ],
+          "default": "skip",
+          "description": "Action when diff produces no operations (the saved file is identical to the original)."
+        },
+        "xmlDiffAndPatch.validationFailBehavior": {
+          "type": "string",
+          "enum": ["warn", "error", "off"],
+          "enumDescriptions": [
+            "Log a warning but still write the diff file.",
+            "Log an error and skip writing the diff file.",
+            "Disable structural validation entirely."
+          ],
+          "default": "warn",
+          "description": "Action when structural validation of a generated diff file fails."
         }
       }
     }

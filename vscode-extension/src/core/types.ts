@@ -1,5 +1,14 @@
 // Core types shared across diff/patch engine, watcher, and config.
 
+/** What to do when a diff produces no operations (the files are identical). */
+export type EmptyDiffBehavior = 'write' | 'skip' | 'delete' | 'warn';
+
+/**
+ * What to do when structural validation of a generated diff file fails.
+ * ('off' disables the check entirely.)
+ */
+export type ValidationFailBehavior = 'warn' | 'error' | 'off';
+
 /** Options controlling diff generation behaviour. Port of C# DiffOptions. */
 export interface DiffOptions {
   /** When true, restrict to full absolute XPath; when false (default), use // shorthand when globally unique. */
@@ -27,6 +36,10 @@ export interface WatcherConfig {
   allowDoubles: boolean;
   watchMode: 'onSave' | 'onTheFly';
   debounceMs: number;
+  /** Action when diff produces no operations (saved file is identical to the original). */
+  emptyDiffBehavior: EmptyDiffBehavior;
+  /** Action when structural validation of a generated diff file fails. */
+  validationFailBehavior: ValidationFailBehavior;
   /**
    * Path segment prepended to the file's relative path when looking up the
    * original file.  Only used to locate originals — never applied to the

@@ -15,7 +15,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import type { WatcherConfig } from './core/types.js';
+import type { WatcherConfig, EmptyDiffBehavior, ValidationFailBehavior } from './core/types.js';
 
 // ─── Public constants ─────────────────────────────────────────────────────────
 
@@ -46,6 +46,10 @@ export interface DiskConfigFile {
   allowDoubles?: boolean;
   watchMode?: 'onSave' | 'onTheFly';
   debounceMs?: number;
+  /** Action when diff produces no operations (files are identical). */
+  emptyDiffBehavior?: EmptyDiffBehavior;
+  /** Action when structural validation of a generated diff fails. */
+  validationFailBehavior?: ValidationFailBehavior;
   /**
    * Path segment prepended to the file's relative path when locating the
    * original file.  Not applied to the output path.  Only honoured for
@@ -173,6 +177,8 @@ function readFromFolderSettings(
     allowDoubles: cfg.get<boolean>('allowDoubles') ?? false,
     watchMode: cfg.get<'onSave' | 'onTheFly'>('watchMode') ?? 'onSave',
     debounceMs: cfg.get<number>('debounceMs') ?? 500,
+    emptyDiffBehavior: cfg.get<EmptyDiffBehavior>('emptyDiffBehavior') ?? 'skip',
+    validationFailBehavior: cfg.get<ValidationFailBehavior>('validationFailBehavior') ?? 'warn',
   };
 
   return buildConfig(root, data, label, 'vscode-folder', outputChannel);
@@ -202,6 +208,8 @@ function readGlobalConfig(outputChannel: vscode.OutputChannel): WatcherConfig | 
     allowDoubles: cfg.get<boolean>('allowDoubles') ?? false,
     watchMode: cfg.get<'onSave' | 'onTheFly'>('watchMode') ?? 'onSave',
     debounceMs: cfg.get<number>('debounceMs') ?? 500,
+    emptyDiffBehavior: cfg.get<EmptyDiffBehavior>('emptyDiffBehavior') ?? 'skip',
+    validationFailBehavior: cfg.get<ValidationFailBehavior>('validationFailBehavior') ?? 'warn',
   };
 
   return buildConfig(root, data, 'global', 'vscode-global', outputChannel);
@@ -288,6 +296,8 @@ function buildConfig(
     allowDoubles: data.allowDoubles ?? false,
     watchMode: data.watchMode ?? 'onSave',
     debounceMs: data.debounceMs ?? 500,
+    emptyDiffBehavior: data.emptyDiffBehavior ?? 'skip',
+    validationFailBehavior: data.validationFailBehavior ?? 'warn',
     pathPrefix: data.pathPrefix ?? '',
     configLabel: label,
     configSource: source,

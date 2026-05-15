@@ -14,12 +14,23 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as fsSync from 'fs';
 import { DOMParser } from '@xmldom/xmldom';
+import type { Document } from '@xmldom/xmldom';
 import type { WatcherConfig, Logger } from './core/types.js';
 import { DiffEngine } from './core/diffEngine.js';
 import { applyPatch } from './core/patchEngine.js';
-import { detectIndentation } from './core/xmlUtils.js';
+import { detectIndentation, ELEMENT_NODE } from './core/xmlUtils.js';
 import { serializeDocument } from './core/xmlSerializer.js';
 import type { StatusBarManager } from './statusBar.js';
+
+/** Returns true when the diff Document root has no child operation elements. */
+function isDiffEmpty(doc: Document): boolean {
+  const root = doc.documentElement;
+  if (!root) return true;
+  for (let child = root.firstChild; child; child = child.nextSibling) {
+    if (child.nodeType === ELEMENT_NODE) return false;
+  }
+  return true;
+}
 
 /** Returns the path relative to `folder`, or null if the file is not under it. */
 function getRelativePath(filePath: string, folder: string): string | null {
@@ -240,15 +251,42 @@ export class WatcherManager {
     const engine = new DiffEngine(diffOptions, this.logger);
     const diffDoc = engine.generateDiff(originalDoc, modifiedDoc);
 
+    // ── Empty diff handling ─────────────────────────────────────────────────
+    if (isDiffEmpty(diffDoc)) {
+      const behavior = this.config.emptyDiffBehavior;
+      switch (behavior) {
+        case 'skip':
+          this.logger.info(`[Diff] No differences found — skipped: '${outputPath}'`);
+          return;
+        case 'warn':
+          this.logger.warn(`[Diff] No differences found — output not written: '${outputPath}'`);
+          return;
+        case 'delete':
+          if (fsSync.existsSync(outputPath)) {
+            await fs.unlink(outputPath);
+            this.logger.info(`[Diff] No differences — deleted existing output: '${outputPath}'`);
+          } else {
+            this.logger.info(`[Diff] No differences — nothing to delete: '${outputPath}'`);
+          }
+          return;
+        case 'write':
+          // Fall through — write the empty <diff/> as normal
+          break;
+      }
+    }
+
     const indentSize = detectIndentation(origContent);
     const output = serializeDocument(diffDoc, indentSize);
 
-    await this.writeOutput(outputPath, output);
-
-    // XSD validation (Option B: only if xsdPath exists)
-    if (this.config.xsdPath) {
-      this.validateDiffStructure(output, outputPath);
+    // ── Structural validation ───────────────────────────────────────────────
+    if (this.config.validationFailBehavior !== 'off') {
+      const valid = this.checkDiffStructure(output, outputPath);
+      if (!valid && this.config.validationFailBehavior === 'error') {
+        return; // issue already logged inside checkDiffStructure
+      }
     }
+
+    await this.writeOutput(outputPath, output);
   }
 
   private async writePatch(
@@ -304,39 +342,44 @@ export class WatcherManager {
   // ─── Structural diff validation ────────────────────────────────────────────
 
   /**
-   * Light structural validation of generated diff XML (Option B behaviour).
-   * Full XSD parsing is not supported in Node.js extension host without
-   * native bindings; we validate the element structure instead.
+   * Checks the structure of a generated diff XML (root = <diff>, children are
+   * <add>/<replace>/<remove> with a `sel` attribute).  Returns true if valid.
+   * Issues are logged at warn or error level depending on `validationFailBehavior`.
    */
-  private validateDiffStructure(xml: string, outputPath: string): void {
+  private checkDiffStructure(xml: string, outputPath: string): boolean {
+    const logIssue =
+      this.config.validationFailBehavior === 'error'
+        ? (msg: string) => this.logger.error(msg)
+        : (msg: string) => this.logger.warn(msg);
+    let isValid = true;
     try {
       const doc = this.parser.parseFromString(xml, 'text/xml');
       const root = doc.documentElement;
       if (!root || root.localName !== 'diff') {
-        this.logger.warn(`[Validation] Root element is not 'diff' in '${outputPath}'`);
-        return;
+        logIssue(`[Validation] Root element is not 'diff' in '${outputPath}'`);
+        return false;
       }
       let child = root.firstChild;
       while (child) {
         if (child.nodeType === 1 /* ELEMENT_NODE */) {
           const name = (child as { localName: string }).localName;
           if (!['add', 'replace', 'remove'].includes(name)) {
-            this.logger.warn(
-              `[Validation] Unexpected element '${name}' in diff '${outputPath}'`
-            );
+            logIssue(`[Validation] Unexpected element '${name}' in diff '${outputPath}'`);
+            isValid = false;
           }
           const sel = (child as unknown as { getAttribute: (n: string) => string | null }).getAttribute('sel');
           if (!sel) {
-            this.logger.warn(
-              `[Validation] Operation '${name}' missing 'sel' attribute in '${outputPath}'`
-            );
+            logIssue(`[Validation] Operation '${name}' missing 'sel' attribute in '${outputPath}'`);
+            isValid = false;
           }
         }
         child = child.nextSibling;
       }
     } catch (err) {
-      this.logger.warn(`[Validation] Could not parse output diff '${outputPath}': ${err}`);
+      logIssue(`[Validation] Could not parse output diff '${outputPath}': ${err}`);
+      return false;
     }
+    return isValid;
   }
 
   // ─── Disposal ─────────────────────────────────────────────────────────────
