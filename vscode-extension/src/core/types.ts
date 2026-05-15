@@ -34,7 +34,7 @@ export interface WatcherConfig {
   passOtherFiles: boolean;
   showDiffEditorOnSave: boolean;
   allowDoubles: boolean;
-  watchMode: 'onSave' | 'onTheFly';
+  watchMode: 'onSave' | 'onTheFly' | 'contextMenuOnly';
   debounceMs: number;
   /** Action when diff produces no operations (saved file is identical to the original). */
   emptyDiffBehavior: EmptyDiffBehavior;

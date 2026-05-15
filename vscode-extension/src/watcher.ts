@@ -113,6 +113,11 @@ export class WatcherManager {
     const mainFolder = mainFolderRole === 'modified' ? modifiedFolder : diffFolder;
     const secondaryFolder = mainFolderRole === 'modified' ? diffFolder : modifiedFolder;
 
+    if (watchMode === 'contextMenuOnly') {
+      // No file watchers — processing triggered exclusively via context menu commands.
+      return;
+    }
+
     if (watchMode === 'onSave') {
       this.disposables.push(
         vscode.workspace.onDidSaveTextDocument((doc) =>

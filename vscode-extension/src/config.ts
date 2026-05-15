@@ -44,7 +44,7 @@ export interface DiskConfigFile {
   passOtherFiles?: boolean;
   showDiffEditorOnSave?: boolean;
   allowDoubles?: boolean;
-  watchMode?: 'onSave' | 'onTheFly';
+  watchMode?: 'onSave' | 'onTheFly' | 'contextMenuOnly';
   debounceMs?: number;
   /** Action when diff produces no operations (files are identical). */
   emptyDiffBehavior?: EmptyDiffBehavior;
@@ -177,7 +177,7 @@ function readFromFolderSettings(
     passOtherFiles: cfg.get<boolean>('passOtherFiles') ?? true,
     showDiffEditorOnSave: cfg.get<boolean>('showDiffEditorOnSave') ?? false,
     allowDoubles: cfg.get<boolean>('allowDoubles') ?? false,
-    watchMode: cfg.get<'onSave' | 'onTheFly'>('watchMode') ?? 'onSave',
+    watchMode: cfg.get<'onSave' | 'onTheFly' | 'contextMenuOnly'>('watchMode') ?? 'onSave',
     debounceMs: cfg.get<number>('debounceMs') ?? 500,
     emptyDiffBehavior: cfg.get<EmptyDiffBehavior>('emptyDiffBehavior') ?? 'delete',
     validationFailBehavior: cfg.get<ValidationFailBehavior>('validationFailBehavior') ?? 'warn',
@@ -210,7 +210,7 @@ function readGlobalConfig(outputChannel: vscode.OutputChannel): WatcherConfig | 
     passOtherFiles: cfg.get<boolean>('passOtherFiles') ?? true,
     showDiffEditorOnSave: cfg.get<boolean>('showDiffEditorOnSave') ?? false,
     allowDoubles: cfg.get<boolean>('allowDoubles') ?? false,
-    watchMode: cfg.get<'onSave' | 'onTheFly'>('watchMode') ?? 'onSave',
+    watchMode: cfg.get<'onSave' | 'onTheFly' | 'contextMenuOnly'>('watchMode') ?? 'onSave',
     debounceMs: cfg.get<number>('debounceMs') ?? 500,
     emptyDiffBehavior: cfg.get<EmptyDiffBehavior>('emptyDiffBehavior') ?? 'delete',
     validationFailBehavior: cfg.get<ValidationFailBehavior>('validationFailBehavior') ?? 'warn',

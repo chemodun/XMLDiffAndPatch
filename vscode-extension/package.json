@@ -146,10 +146,11 @@
         },
         "xmlDiffAndPatch.watchMode": {
           "type": "string",
-          "enum": ["onSave", "onTheFly"],
+          "enum": ["onSave", "onTheFly", "contextMenuOnly"],
           "enumDescriptions": [
             "Trigger processing only on explicit VS Code save (Ctrl+S).",
-            "Trigger processing on any file-system change, with debounce."
+            "Trigger processing on any file-system change, with debounce.",
+            "Disable automatic watching entirely; use only the explorer context menu commands."
           ],
           "default": "onSave",
           "description": "When to trigger diff/patch processing."
