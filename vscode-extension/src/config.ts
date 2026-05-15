@@ -179,7 +179,7 @@ function readFromFolderSettings(
     allowDoubles: cfg.get<boolean>('allowDoubles') ?? false,
     watchMode: cfg.get<'onSave' | 'onTheFly'>('watchMode') ?? 'onSave',
     debounceMs: cfg.get<number>('debounceMs') ?? 500,
-    emptyDiffBehavior: cfg.get<EmptyDiffBehavior>('emptyDiffBehavior') ?? 'skip',
+    emptyDiffBehavior: cfg.get<EmptyDiffBehavior>('emptyDiffBehavior') ?? 'delete',
     validationFailBehavior: cfg.get<ValidationFailBehavior>('validationFailBehavior') ?? 'warn',
     pathPrefix: getInheritedString(cfg, 'pathPrefix'),
     debug: cfg.get<boolean>('debug') ?? false,
@@ -212,7 +212,7 @@ function readGlobalConfig(outputChannel: vscode.OutputChannel): WatcherConfig | 
     allowDoubles: cfg.get<boolean>('allowDoubles') ?? false,
     watchMode: cfg.get<'onSave' | 'onTheFly'>('watchMode') ?? 'onSave',
     debounceMs: cfg.get<number>('debounceMs') ?? 500,
-    emptyDiffBehavior: cfg.get<EmptyDiffBehavior>('emptyDiffBehavior') ?? 'skip',
+    emptyDiffBehavior: cfg.get<EmptyDiffBehavior>('emptyDiffBehavior') ?? 'delete',
     validationFailBehavior: cfg.get<ValidationFailBehavior>('validationFailBehavior') ?? 'warn',
     pathPrefix: getInheritedString(cfg, 'pathPrefix'),
     debug: cfg.get<boolean>('debug') ?? false,
@@ -309,7 +309,10 @@ function buildConfig(
     allowDoubles: data.allowDoubles ?? false,
     watchMode: data.watchMode ?? 'onSave',
     debounceMs: data.debounceMs ?? 500,
-    emptyDiffBehavior: data.emptyDiffBehavior ?? 'skip',
+    emptyDiffBehavior: (() => {
+      const v = data.emptyDiffBehavior ?? 'delete';
+      return (v as string) === 'skip' ? 'delete' : v; // normalise legacy 'skip'
+    })(),
     validationFailBehavior: data.validationFailBehavior ?? 'warn',
     pathPrefix: data.pathPrefix ?? '',
     configLabel: label,

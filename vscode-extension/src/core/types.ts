@@ -1,7 +1,7 @@
 // Core types shared across diff/patch engine, watcher, and config.
 
 /** What to do when a diff produces no operations (the files are identical). */
-export type EmptyDiffBehavior = 'write' | 'skip' | 'delete' | 'warn';
+export type EmptyDiffBehavior = 'write' | 'delete' | 'warn' | 'warnDelete';
 
 /**
  * What to do when structural validation of a generated diff file fails.

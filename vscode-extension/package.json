@@ -102,14 +102,14 @@
         },
         "xmlDiffAndPatch.emptyDiffBehavior": {
           "type": "string",
-          "enum": ["write", "skip", "delete", "warn"],
+          "enum": ["write", "delete", "warn", "warnDelete"],
           "enumDescriptions": [
             "Write the empty diff file to the output folder.",
-            "Do not write anything (silent skip).",
-            "Delete the output file if it already exists.",
-            "Log a warning and skip writing."
+            "Delete the output file if it already exists (silent).",
+            "Log a warning but leave any existing output file in place.",
+            "Log a warning and delete the output file if it already exists."
           ],
-          "default": "skip",
+          "default": "delete",
           "description": "Action when diff produces no operations (the saved file is identical to the original)."
         },
         "xmlDiffAndPatch.validationFailBehavior": {

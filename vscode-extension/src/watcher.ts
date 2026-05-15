@@ -268,20 +268,24 @@ export class WatcherManager {
     // ── Empty diff handling ─────────────────────────────────────────────────
     if (isDiffEmpty(diffDoc)) {
       const behavior = this.config.emptyDiffBehavior;
+      const deleteExisting = async () => {
+        if (fsSync.existsSync(outputPath)) {
+          await fs.unlink(outputPath);
+          this.logger.info(`[Diff] No differences — deleted existing output: '${outputPath}'`);
+        } else {
+          this.logger.debug(`[Diff] No differences — no existing output to delete: '${outputPath}'`);
+        }
+      };
       switch (behavior) {
-        case 'skip':
-          this.logger.info(`[Diff] No differences found — skipped: '${outputPath}'`);
-          return;
         case 'warn':
           this.logger.warn(`[Diff] No differences found — output not written: '${outputPath}'`);
           return;
+        case 'warnDelete':
+          this.logger.warn(`[Diff] No differences found — removing output: '${outputPath}'`);
+          await deleteExisting();
+          return;
         case 'delete':
-          if (fsSync.existsSync(outputPath)) {
-            await fs.unlink(outputPath);
-            this.logger.info(`[Diff] No differences — deleted existing output: '${outputPath}'`);
-          } else {
-            this.logger.info(`[Diff] No differences — nothing to delete: '${outputPath}'`);
-          }
+          await deleteExisting();
           return;
         case 'write':
           // Fall through — write the empty <diff/> as normal
