@@ -42,12 +42,13 @@ function getRelativePath(filePath: string, folder: string): string | null {
 }
 
 /** Creates an output-channel-backed Logger, prefixing every message with the config label. */
-function makeLogger(channel: vscode.OutputChannel, label: string): Logger {
+function makeLogger(channel: vscode.OutputChannel, label: string, debugEnabled: boolean): Logger {
   const tag = `[${label}]`;
   return {
     info: (msg) => channel.appendLine(`[INFO]  ${tag} ${msg}`),
     warn: (msg) => channel.appendLine(`[WARN]  ${tag} ${msg}`),
     error: (msg) => channel.appendLine(`[ERROR] ${tag} ${msg}`),
+    debug: (msg) => { if (debugEnabled) channel.appendLine(`[DEBUG] ${tag} ${msg}`); },
   };
 }
 
@@ -67,7 +68,7 @@ export class WatcherManager {
     private readonly outputChannel: vscode.OutputChannel,
     private readonly statusBar: StatusBarManager
   ) {
-    this.logger = makeLogger(outputChannel, config.configLabel);
+    this.logger = makeLogger(outputChannel, config.configLabel, config.debug);
   }
 
   // ─── Setup ────────────────────────────────────────────────────────────────
@@ -136,6 +137,7 @@ export class WatcherManager {
   ): void {
     // Loop guard
     if (this.outputPaths.has(filePath)) {
+      this.logger.debug(`Loop guard: skipping own output '${filePath}'`);
       return;
     }
 
@@ -143,6 +145,8 @@ export class WatcherManager {
     const relSecondary = secondaryFolder
       ? getRelativePath(filePath, secondaryFolder)
       : null;
+
+    this.logger.debug(`Save event: '${filePath}' relMain=${relMain ?? 'n/a'} relSecondary=${relSecondary ?? 'n/a'}`);
 
     if (relMain !== null) {
       this.processFile(filePath, relMain, 'main', mainFolder, secondaryFolder).catch((err) =>
@@ -171,7 +175,10 @@ export class WatcherManager {
     // The prefix is NOT applied to the output (diff / patch / copy) path.
     const originalPath = path.join(config.originalFolder, config.pathPrefix, relPath);
     const originalExists = fsSync.existsSync(originalPath);
-    this.logger.info(`[Check] original: '${originalPath}' — ${originalExists ? 'found' : 'NOT FOUND'}`);
+    this.logger.debug(
+      `processFile: source=${source} isXml=${isXml} relPath='${relPath}'` +
+      ` originalPath='${originalPath}' exists=${originalExists}`
+    );
 
     // Determine output folder and operation
     let outputFolder: string;
@@ -209,6 +216,7 @@ export class WatcherManager {
     }
 
     const outputPath = path.join(outputFolder, relPath);
+    this.logger.debug(`operation=${operation} outputPath='${outputPath}'`);
     this.statusBar.setState('processing');
 
     try {

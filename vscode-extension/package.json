@@ -122,6 +122,12 @@
           ],
           "default": "warn",
           "description": "Action when structural validation of a generated diff file fails."
+        },
+        "xmlDiffAndPatch.debug": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable verbose debug logging in the X4DiffAndPatch output channel.",
+          "scope": "language-overridable"
         }
       }
     }

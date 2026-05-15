@@ -78,7 +78,7 @@ async function initialise(): Promise<void> {
 
   for (const config of configs) {
     outputChannel.appendLine(`[INFO]  ─── [${config.configLabel}] (${config.configSource}) ───`);
-    outputChannel.appendLine(`[INFO]    role     : ${config.mainFolderRole} | mode: ${config.watchMode}`);
+    outputChannel.appendLine(`[INFO]    role     : ${config.mainFolderRole} | mode: ${config.watchMode}${config.debug ? ' | debug: on' : ''}`);
     outputChannel.appendLine(`[INFO]    original : ${config.originalFolder}`);
     if (config.pathPrefix) {
       outputChannel.appendLine(`[INFO]    prefix   : ${config.pathPrefix}`);

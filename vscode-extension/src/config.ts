@@ -56,6 +56,8 @@ export interface DiskConfigFile {
    * disk config files; ignored for VS Code settings.
    */
   pathPrefix?: string;
+  /** Enable verbose debug logging in the output channel. */
+  debug?: boolean;
 }
 
 // ─── Settings keys that trigger per-folder activation ────────────────────────
@@ -180,6 +182,7 @@ function readFromFolderSettings(
     emptyDiffBehavior: cfg.get<EmptyDiffBehavior>('emptyDiffBehavior') ?? 'skip',
     validationFailBehavior: cfg.get<ValidationFailBehavior>('validationFailBehavior') ?? 'warn',
     pathPrefix: getInheritedString(cfg, 'pathPrefix'),
+    debug: cfg.get<boolean>('debug') ?? false,
   };
 
   return buildConfig(root, data, label, 'vscode-folder', outputChannel);
@@ -212,6 +215,7 @@ function readGlobalConfig(outputChannel: vscode.OutputChannel): WatcherConfig | 
     emptyDiffBehavior: cfg.get<EmptyDiffBehavior>('emptyDiffBehavior') ?? 'skip',
     validationFailBehavior: cfg.get<ValidationFailBehavior>('validationFailBehavior') ?? 'warn',
     pathPrefix: getInheritedString(cfg, 'pathPrefix'),
+    debug: cfg.get<boolean>('debug') ?? false,
   };
 
   return buildConfig(root, data, 'global', 'vscode-global', outputChannel);
@@ -310,6 +314,7 @@ function buildConfig(
     pathPrefix: data.pathPrefix ?? '',
     configLabel: label,
     configSource: source,
+    debug: data.debug ?? false,
   };
 }
 

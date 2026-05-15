@@ -51,6 +51,8 @@ export interface WatcherConfig {
   configLabel: string;
   /** Where this configuration was read from. */
   configSource: 'vscode-folder' | 'disk-file' | 'vscode-global';
+  /** When true, emit verbose debug messages to the output channel. */
+  debug: boolean;
 }
 
 /** Minimal logging interface used by the engine layer. */
@@ -58,6 +60,8 @@ export interface Logger {
   info(message: string): void;
   warn(message: string): void;
   error(message: string): void;
+  /** Emits only when debug mode is enabled for this config. */
+  debug(message: string): void;
 }
 
 /** Logger that discards all messages. */
@@ -65,4 +69,5 @@ export const NoOpLogger: Logger = {
   info: () => {},
   warn: () => {},
   error: () => {},
+  debug: () => {},
 };
