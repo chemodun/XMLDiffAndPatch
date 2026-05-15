@@ -4,6 +4,6 @@
   ],
   "settings": {
     "xmlDiffAndPatch.mainFolderRole": "modified",
-    "xmlDiffAndPatch.diffFolder": "diff"
+    "xmlDiffAndPatch.diffFolder": "../diff"
   }
 }
