@@ -7,10 +7,10 @@
  *      the folder scope in `.vscode/settings.json` or a `.code-workspace` file)
  *   3. Global VS Code settings (fallback when nothing else is configured)
  *
- * For sources (1) and (2) the containing folder / workspace folder is treated
- * as the implicit "main" folder: if `modifiedFolder` (for `mainFolderRole='modified'`)
- * or `diffFolder` (for `mainFolderRole='diff'`) is not explicitly set, it defaults
- * to `.` — the folder that owns the configuration.
+ * Both `modifiedFolder` and `diffFolder` must always be configured and must
+ * resolve to different paths on disk.  Either can be set to "." to refer to
+ * the workspace / config-file folder itself.  They must never point to the
+ * same directory.
  */
 import * as vscode from 'vscode';
 import * as path from 'path';
@@ -31,16 +31,13 @@ export const DISK_CONFIG_FILENAME = 'x4diffandpatch.json';
  */
 export interface DiskConfigFile {
   originalFolder?: string;
-  mainFolderRole?: 'modified' | 'diff';
-  /** If omitted and mainFolderRole='modified', defaults to '.' (the file's folder). */
   modifiedFolder?: string;
-  /** If omitted and mainFolderRole='diff', defaults to '.' (the file's folder). */
   diffFolder?: string;
   xsdPath?: string;
   onlyFullPath?: boolean;
   useAllAttributes?: boolean;
   ignoreDiffInAttribute?: string | null;
-  reflectToMainFolder?: boolean;
+  reflectDiffToModified?: boolean;
   passOtherFiles?: boolean;
   showDiffEditorOnSave?: boolean;
   allowDoubles?: boolean;
@@ -64,7 +61,6 @@ export interface DiskConfigFile {
 
 const FOLDER_TRIGGER_KEYS = [
   'originalFolder',
-  'mainFolderRole',
   'modifiedFolder',
   'diffFolder',
 ] as const;
@@ -123,7 +119,7 @@ export async function readAllConfigs(
 
 /**
  * Reads a single config from a disk JSON file.
- * The file's containing folder becomes the implicit main folder.
+ * Paths are resolved relative to the file's containing folder.
  */
 export function readFromDiskFile(
   configFilePath: string,
@@ -140,20 +136,12 @@ export function readFromDiskFile(
     return null;
   }
 
-  const mainFolderRole: 'modified' | 'diff' = data.mainFolderRole ?? 'modified';
-  // The file's folder IS the main folder — default the main-role path to '.'
-  const withDefaults: DiskConfigFile = {
-    ...data,
-    modifiedFolder: data.modifiedFolder ?? (mainFolderRole === 'modified' ? '.' : ''),
-    diffFolder: data.diffFolder ?? (mainFolderRole === 'diff' ? '.' : ''),
-  };
-
-  return buildConfig(root, withDefaults, label, 'disk-file', outputChannel);
+  return buildConfig(root, data, label, 'disk-file', outputChannel);
 }
 
 // ─── Per-source readers ───────────────────────────────────────────────────────
 
-/** Reads per-folder VS Code settings; the workspace folder is the implicit main folder. */
+/** Reads per-folder VS Code settings; paths resolve relative to the workspace folder. */
 function readFromFolderSettings(
   folder: vscode.WorkspaceFolder,
   outputChannel: vscode.OutputChannel
@@ -162,18 +150,15 @@ function readFromFolderSettings(
   const label = `folder:${folder.name}`;
   const cfg = vscode.workspace.getConfiguration('xmlDiffAndPatch', folder.uri);
 
-  const mainFolderRole: 'modified' | 'diff' = cfg.get('mainFolderRole') ?? 'modified';
   const data: DiskConfigFile = {
-    mainFolderRole,
     originalFolder: getInheritedString(cfg, 'originalFolder'),
-    // Default the main-role folder to '.' (the workspace folder itself)
-    modifiedFolder: getInheritedString(cfg, 'modifiedFolder') || (mainFolderRole === 'modified' ? '.' : ''),
-    diffFolder: getInheritedString(cfg, 'diffFolder') || (mainFolderRole === 'diff' ? '.' : ''),
+    modifiedFolder: getInheritedString(cfg, 'modifiedFolder'),
+    diffFolder: getInheritedString(cfg, 'diffFolder'),
     xsdPath: getInheritedString(cfg, 'xsdPath') || './diff.xsd',
     onlyFullPath: cfg.get<boolean>('onlyFullPath') ?? false,
     useAllAttributes: cfg.get<boolean>('useAllAttributes') ?? false,
     ignoreDiffInAttribute: getInheritedString(cfg, 'ignoreDiffInAttribute') || null,
-    reflectToMainFolder: cfg.get<boolean>('reflectToMainFolder') ?? true,
+    reflectDiffToModified: cfg.get<boolean>('reflectDiffToModified') ?? true,
     passOtherFiles: cfg.get<boolean>('passOtherFiles') ?? true,
     showDiffEditorOnSave: cfg.get<boolean>('showDiffEditorOnSave') ?? false,
     allowDoubles: cfg.get<boolean>('allowDoubles') ?? false,
@@ -198,7 +183,6 @@ function readGlobalConfig(outputChannel: vscode.OutputChannel): WatcherConfig | 
 
   const cfg = vscode.workspace.getConfiguration('xmlDiffAndPatch');
   const data: DiskConfigFile = {
-    mainFolderRole: cfg.get<'modified' | 'diff'>('mainFolderRole') ?? 'modified',
     originalFolder: getInheritedString(cfg, 'originalFolder'),
     modifiedFolder: getInheritedString(cfg, 'modifiedFolder'),
     diffFolder: getInheritedString(cfg, 'diffFolder'),
@@ -206,7 +190,7 @@ function readGlobalConfig(outputChannel: vscode.OutputChannel): WatcherConfig | 
     onlyFullPath: cfg.get<boolean>('onlyFullPath') ?? false,
     useAllAttributes: cfg.get<boolean>('useAllAttributes') ?? false,
     ignoreDiffInAttribute: getInheritedString(cfg, 'ignoreDiffInAttribute') || null,
-    reflectToMainFolder: cfg.get<boolean>('reflectToMainFolder') ?? true,
+    reflectDiffToModified: cfg.get<boolean>('reflectDiffToModified') ?? true,
     passOtherFiles: cfg.get<boolean>('passOtherFiles') ?? true,
     showDiffEditorOnSave: cfg.get<boolean>('showDiffEditorOnSave') ?? false,
     allowDoubles: cfg.get<boolean>('allowDoubles') ?? false,
@@ -230,18 +214,9 @@ function buildConfig(
   source: WatcherConfig['configSource'],
   outputChannel: vscode.OutputChannel
 ): WatcherConfig | null {
-  const mainFolderRole: 'modified' | 'diff' = data.mainFolderRole ?? 'modified';
-
   const originalFolder = resolvePath(data.originalFolder ?? '', root);
-  // When a folder is the "main" role its default is the workspace root ('.')
-  const modifiedFolder = resolvePath(
-    data.modifiedFolder || (mainFolderRole === 'modified' ? '.' : ''),
-    root
-  );
-  const diffFolder = resolvePath(
-    data.diffFolder || (mainFolderRole === 'diff' ? '.' : ''),
-    root
-  );
+  const modifiedFolder = resolvePath(data.modifiedFolder ?? '', root);
+  const diffFolder = resolvePath(data.diffFolder ?? '', root);
   const xsdResolved = resolvePath(data.xsdPath ?? './diff.xsd', root);
 
   // ── Fatal validation ──────────────────────────────────────────────────────
@@ -252,24 +227,22 @@ function buildConfig(
     return null;
   }
 
-  const mainFolder = mainFolderRole === 'modified' ? modifiedFolder : diffFolder;
-  if (!mainFolder) {
-    const key = mainFolderRole === 'modified' ? 'modifiedFolder' : 'diffFolder';
-    const msg = `[FATAL] [${label}] ${key} (main folder) is not set. Skipping.`;
+  if (!modifiedFolder) {
+    const msg = `[FATAL] [${label}] modifiedFolder is not set. Skipping.`;
     outputChannel.appendLine(msg);
     vscode.window.showErrorMessage(msg);
     return null;
   }
 
-  if (mainFolderRole === 'modified' && !diffFolder) {
-    const msg = `[FATAL] [${label}] diffFolder is required when mainFolderRole="modified". Skipping.`;
+  if (!diffFolder) {
+    const msg = `[FATAL] [${label}] diffFolder is not set. Skipping.`;
     outputChannel.appendLine(msg);
     vscode.window.showErrorMessage(msg);
     return null;
   }
 
-  if (mainFolderRole === 'diff' && !modifiedFolder) {
-    const msg = `[FATAL] [${label}] modifiedFolder is required when mainFolderRole="diff". Skipping.`;
+  if (modifiedFolder === diffFolder) {
+    const msg = `[FATAL] [${label}] modifiedFolder and diffFolder must not be the same directory ('${modifiedFolder}'). Skipping.`;
     outputChannel.appendLine(msg);
     vscode.window.showErrorMessage(msg);
     return null;
@@ -296,14 +269,13 @@ function buildConfig(
 
   return {
     originalFolder,
-    mainFolderRole,
     modifiedFolder,
     diffFolder,
     xsdPath,
     onlyFullPath: data.onlyFullPath ?? false,
     useAllAttributes: data.useAllAttributes ?? false,
     ignoreDiffInAttribute: data.ignoreDiffInAttribute ?? null,
-    reflectToMainFolder: data.reflectToMainFolder ?? true,
+    reflectDiffToModified: data.reflectDiffToModified ?? true,
     passOtherFiles: data.passOtherFiles ?? true,
     showDiffEditorOnSave: data.showDiffEditorOnSave ?? false,
     allowDoubles: data.allowDoubles ?? false,

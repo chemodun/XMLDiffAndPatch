@@ -22,7 +22,6 @@ export interface DiffOptions {
 /** Resolved and validated watcher configuration (derived from VS Code settings or disk file). */
 export interface WatcherConfig {
   originalFolder: string;
-  mainFolderRole: 'modified' | 'diff';
   modifiedFolder: string;
   diffFolder: string;
   /** Absolute path to diff.xsd, or null if the file does not exist. */
@@ -30,7 +29,7 @@ export interface WatcherConfig {
   onlyFullPath: boolean;
   useAllAttributes: boolean;
   ignoreDiffInAttribute: string | null;
-  reflectToMainFolder: boolean;
+  reflectDiffToModified: boolean;
   passOtherFiles: boolean;
   showDiffEditorOnSave: boolean;
   allowDoubles: boolean;

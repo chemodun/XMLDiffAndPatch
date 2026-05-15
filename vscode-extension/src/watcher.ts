@@ -2,12 +2,13 @@
  * File-save watcher.
  *
  * Implements §6 of the specification:
- *   - Watches the main folder and (when reflectToMainFolder = true) the
- *     secondary folder.
+ *   - Watches modifiedFolder and (when reflectDiffToModified = true) diffFolder.
  *   - On save, resolves which operation to run (DiffEngine / PatchEngine /
  *     passOtherFiles copy), writes the output, and guards against loops.
  *   - Supports both "onSave" mode (workspace.onDidSaveTextDocument) and
  *     "onTheFly" mode (FileSystemWatcher with debounce).
+ *   - In both modes, saves in modifiedFolder generate diffs; saves in
+ *     diffFolder (when reflectDiffToModified=true) apply patches.
  */
 import * as vscode from 'vscode';
 import * as path from 'path';
@@ -107,11 +108,7 @@ export class WatcherManager {
   // ─── Setup ────────────────────────────────────────────────────────────────
 
   setup(): void {
-    const { mainFolderRole, modifiedFolder, diffFolder, reflectToMainFolder, watchMode } =
-      this.config;
-
-    const mainFolder = mainFolderRole === 'modified' ? modifiedFolder : diffFolder;
-    const secondaryFolder = mainFolderRole === 'modified' ? diffFolder : modifiedFolder;
+    const { modifiedFolder, diffFolder, reflectDiffToModified, watchMode } = this.config;
 
     if (watchMode === 'contextMenuOnly') {
       // No file watchers — processing triggered exclusively via context menu commands.
@@ -121,29 +118,29 @@ export class WatcherManager {
     if (watchMode === 'onSave') {
       this.disposables.push(
         vscode.workspace.onDidSaveTextDocument((doc) =>
-          this.handleSaveEvent(doc.uri.fsPath, mainFolder, secondaryFolder)
+          this.handleSaveEvent(doc.uri.fsPath, modifiedFolder, diffFolder)
         )
       );
     } else {
-      // onTheFly — FileSystemWatcher for main folder
-      this.addFsWatcher(mainFolder, mainFolder, secondaryFolder);
+      // onTheFly — always watch modifiedFolder
+      this.addFsWatcher(modifiedFolder, modifiedFolder, diffFolder);
 
-      if (reflectToMainFolder && secondaryFolder) {
-        this.addFsWatcher(secondaryFolder, mainFolder, secondaryFolder);
+      if (reflectDiffToModified) {
+        this.addFsWatcher(diffFolder, modifiedFolder, diffFolder);
       }
     }
   }
 
   private addFsWatcher(
     watchedFolder: string,
-    mainFolder: string,
-    secondaryFolder: string
+    modifiedFolder: string,
+    diffFolder: string
   ): void {
     const pattern = new vscode.RelativePattern(watchedFolder, '**/*');
     const watcher = vscode.workspace.createFileSystemWatcher(pattern);
 
     const handler = (uri: vscode.Uri) =>
-      this.handleDebounced(uri.fsPath, mainFolder, secondaryFolder);
+      this.handleDebounced(uri.fsPath, modifiedFolder, diffFolder);
 
     watcher.onDidChange(handler);
     watcher.onDidCreate(handler);
@@ -152,8 +149,8 @@ export class WatcherManager {
 
   private handleDebounced(
     filePath: string,
-    mainFolder: string,
-    secondaryFolder: string
+    modifiedFolder: string,
+    diffFolder: string
   ): void {
     const existing = this.debounceTimers.get(filePath);
     if (existing) {
@@ -161,7 +158,7 @@ export class WatcherManager {
     }
     const timer = setTimeout(() => {
       this.debounceTimers.delete(filePath);
-      this.handleSaveEvent(filePath, mainFolder, secondaryFolder);
+      this.handleSaveEvent(filePath, modifiedFolder, diffFolder);
     }, this.config.debounceMs);
     this.debounceTimers.set(filePath, timer);
   }
@@ -170,8 +167,8 @@ export class WatcherManager {
 
   private handleSaveEvent(
     filePath: string,
-    mainFolder: string,
-    secondaryFolder: string
+    modifiedFolder: string,
+    diffFolder: string
   ): void {
     // Extension only processes XML files — ignore everything else immediately.
     if (path.extname(filePath).toLowerCase() !== '.xml') {
@@ -184,24 +181,21 @@ export class WatcherManager {
       return;
     }
 
-    const relMain = getRelativePath(filePath, mainFolder);
-    const relSecondary = secondaryFolder
-      ? getRelativePath(filePath, secondaryFolder)
-      : null;
+    const relModified = getRelativePath(filePath, modifiedFolder);
+    const relDiff = getRelativePath(filePath, diffFolder);
 
-    this.logger.debug(`Save event: '${filePath}' relMain=${relMain ?? 'n/a'} relSecondary=${relSecondary ?? 'n/a'}`);
+    this.logger.debug(`Save event: '${filePath}' relModified=${relModified ?? 'n/a'} relDiff=${relDiff ?? 'n/a'}`);
 
-    // Check secondary FIRST: the secondary folder may be a subdirectory of the
-    // main folder (e.g. diff/ inside the mod root).  A file that is under the
-    // secondary folder must never be processed as a main-folder event.
-    if (relSecondary !== null) {
-      if (this.config.reflectToMainFolder) {
-        this.processFile(filePath, relSecondary, 'secondary', mainFolder, secondaryFolder).catch(
+    // Check diffFolder FIRST: it may be a subdirectory of modifiedFolder.
+    // A file inside diffFolder must never be processed as a modified-folder event.
+    if (relDiff !== null) {
+      if (this.config.reflectDiffToModified) {
+        this.processFile(filePath, relDiff, 'diff', modifiedFolder, diffFolder).catch(
           (err) => this.logger.error(`Unhandled error processing '${filePath}': ${err}`)
         );
       }
-    } else if (relMain !== null) {
-      this.processFile(filePath, relMain, 'main', mainFolder, secondaryFolder).catch((err) =>
+    } else if (relModified !== null) {
+      this.processFile(filePath, relModified, 'modified', modifiedFolder, diffFolder).catch((err) =>
         this.logger.error(`Unhandled error processing '${filePath}': ${err}`)
       );
     }
@@ -212,16 +206,12 @@ export class WatcherManager {
   private async processFile(
     savedPath: string,
     relPath: string,
-    source: 'main' | 'secondary',
-    mainFolder: string,
-    secondaryFolder: string
+    source: 'modified' | 'diff',
+    modifiedFolder: string,
+    diffFolder: string
   ): Promise<void> {
     const { config } = this;
     const isXml = path.extname(savedPath).toLowerCase() === '.xml';
-    // pathPrefix is inserted between originalFolder and the file's relative path
-    // so the original can live in a sub-tree that differs from the mod layout.
-    // The prefix is NOT applied to the output (diff / patch / copy) path.
-    // An empty pathPrefix is treated as "no prefix" — never normalised to '.'.
     const originalPath = config.pathPrefix
       ? path.join(config.originalFolder, config.pathPrefix, relPath)
       : path.join(config.originalFolder, relPath);
@@ -235,10 +225,11 @@ export class WatcherManager {
     let outputFolder: string;
     let operation: 'diff' | 'patch' | 'copy';
 
-    if (source === 'main') {
-      outputFolder = secondaryFolder;
+    if (source === 'modified') {
+      // Modified file saved → generate a diff into diffFolder
+      outputFolder = diffFolder;
       if (isXml && originalExists) {
-        operation = config.mainFolderRole === 'modified' ? 'diff' : 'patch';
+        operation = 'diff';
       } else if (!originalExists && config.passOtherFiles) {
         operation = 'copy';
       } else {
@@ -250,10 +241,10 @@ export class WatcherManager {
         return;
       }
     } else {
-      // secondary → reflect back to main
-      outputFolder = mainFolder;
+      // Diff file saved → apply patch into modifiedFolder
+      outputFolder = modifiedFolder;
       if (isXml && originalExists) {
-        operation = config.mainFolderRole === 'modified' ? 'patch' : 'diff';
+        operation = 'patch';
       } else if (!originalExists && config.passOtherFiles) {
         operation = 'copy';
       } else {

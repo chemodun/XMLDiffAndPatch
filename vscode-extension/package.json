@@ -84,25 +84,15 @@
           "default": "",
           "description": "Path to the folder containing the original (vanilla/baseline) XML files. Always required."
         },
-        "xmlDiffAndPatch.mainFolderRole": {
-          "type": "string",
-          "enum": ["modified", "diff"],
-          "enumDescriptions": [
-            "The main watched folder holds modified XML files; diffs are generated into diffFolder.",
-            "The main watched folder holds diff XML files; patches are applied into modifiedFolder."
-          ],
-          "default": "modified",
-          "description": "Role of the primary watched folder."
-        },
         "xmlDiffAndPatch.modifiedFolder": {
           "type": "string",
           "default": "",
-          "description": "Path to the folder that holds modified (patched) XML files. When mainFolderRole=modified this IS the main watched folder."
+          "description": "Path to the folder that holds modified (patched) XML files. Use '.' for the workspace / config-file folder. Must differ from diffFolder."
         },
         "xmlDiffAndPatch.diffFolder": {
           "type": "string",
           "default": "",
-          "description": "Path to the folder that holds diff XML files. When mainFolderRole=diff this IS the main watched folder."
+          "description": "Path to the folder that holds diff XML files. Must differ from modifiedFolder."
         },
         "xmlDiffAndPatch.xsdPath": {
           "type": "string",
@@ -124,10 +114,10 @@
           "default": null,
           "description": "Attribute name to ignore when comparing elements (e.g. 'version'). null = no attribute ignored."
         },
-        "xmlDiffAndPatch.reflectToMainFolder": {
+        "xmlDiffAndPatch.reflectDiffToModified": {
           "type": "boolean",
           "default": true,
-          "description": "If true (default), saves in the secondary folder are reflected back to the main folder."
+          "description": "If true (default), saves in diffFolder are also processed: the diff is applied to the original to regenerate the modified file."
         },
         "xmlDiffAndPatch.passOtherFiles": {
           "type": "boolean",
