@@ -6,7 +6,9 @@
       "type": "extensionHost",
       "request": "launch",
       "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}/vscode-extension"
+        "--extensionDevelopmentPath=${workspaceFolder}/vscode-extension",
+        "--profile=X4DiffAndPatch",
+        "${workspaceFolder}/test-workspace/test.code-workspace"
       ],
       "outFiles": [
         "${workspaceFolder}/vscode-extension/out/**/*.js"
