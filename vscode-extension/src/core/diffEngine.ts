@@ -148,7 +148,14 @@ export class DiffEngine {
               this.compareAttributes(originalChildren[i + 1], modifiedChildren[j + 1], true)
                 .matchedEnough);
 
-          if (childrenMatch && siblingsAlign) {
+          // Don't consume modifiedChild via a replace if it is an exact copy of a
+          // later original element — that element should match it naturally, and
+          // originalChild should be emitted as a remove instead.
+          const modifiedMatchesLaterOriginal = originalChildren
+            .slice(i + 1)
+            .some((oc) => exactlyMatches(oc, modifiedChild));
+
+          if (childrenMatch && siblingsAlign && !modifiedMatchesLaterOriginal) {
             if (!checkOnly) {
               this.diffRootAddOperation(diffRoot, savedOp);
             }
