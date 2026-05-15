@@ -171,6 +171,7 @@ export class WatcherManager {
     // The prefix is NOT applied to the output (diff / patch / copy) path.
     const originalPath = path.join(config.originalFolder, config.pathPrefix, relPath);
     const originalExists = fsSync.existsSync(originalPath);
+    this.logger.info(`[Check] original: '${originalPath}' — ${originalExists ? 'found' : 'NOT FOUND'}`);
 
     // Determine output folder and operation
     let outputFolder: string;

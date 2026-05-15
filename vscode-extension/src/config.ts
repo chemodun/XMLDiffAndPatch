@@ -179,6 +179,7 @@ function readFromFolderSettings(
     debounceMs: cfg.get<number>('debounceMs') ?? 500,
     emptyDiffBehavior: cfg.get<EmptyDiffBehavior>('emptyDiffBehavior') ?? 'skip',
     validationFailBehavior: cfg.get<ValidationFailBehavior>('validationFailBehavior') ?? 'warn',
+    pathPrefix: getInheritedString(cfg, 'pathPrefix'),
   };
 
   return buildConfig(root, data, label, 'vscode-folder', outputChannel);
@@ -210,6 +211,7 @@ function readGlobalConfig(outputChannel: vscode.OutputChannel): WatcherConfig | 
     debounceMs: cfg.get<number>('debounceMs') ?? 500,
     emptyDiffBehavior: cfg.get<EmptyDiffBehavior>('emptyDiffBehavior') ?? 'skip',
     validationFailBehavior: cfg.get<ValidationFailBehavior>('validationFailBehavior') ?? 'warn',
+    pathPrefix: getInheritedString(cfg, 'pathPrefix'),
   };
 
   return buildConfig(root, data, 'global', 'vscode-global', outputChannel);
@@ -227,8 +229,15 @@ function buildConfig(
   const mainFolderRole: 'modified' | 'diff' = data.mainFolderRole ?? 'modified';
 
   const originalFolder = resolvePath(data.originalFolder ?? '', root);
-  const modifiedFolder = resolvePath(data.modifiedFolder ?? '', root);
-  const diffFolder = resolvePath(data.diffFolder ?? '', root);
+  // When a folder is the "main" role its default is the workspace root ('.')
+  const modifiedFolder = resolvePath(
+    data.modifiedFolder || (mainFolderRole === 'modified' ? '.' : ''),
+    root
+  );
+  const diffFolder = resolvePath(
+    data.diffFolder || (mainFolderRole === 'diff' ? '.' : ''),
+    root
+  );
   const xsdResolved = resolvePath(data.xsdPath ?? './diff.xsd', root);
 
   // ── Fatal validation ──────────────────────────────────────────────────────
