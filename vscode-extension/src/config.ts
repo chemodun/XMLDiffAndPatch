@@ -163,14 +163,14 @@ function readFromFolderSettings(
   const mainFolderRole: 'modified' | 'diff' = cfg.get('mainFolderRole') ?? 'modified';
   const data: DiskConfigFile = {
     mainFolderRole,
-    originalFolder: cfg.get<string>('originalFolder') ?? '',
+    originalFolder: getInheritedString(cfg, 'originalFolder'),
     // Default the main-role folder to '.' (the workspace folder itself)
-    modifiedFolder: cfg.get<string>('modifiedFolder') || (mainFolderRole === 'modified' ? '.' : ''),
-    diffFolder: cfg.get<string>('diffFolder') || (mainFolderRole === 'diff' ? '.' : ''),
-    xsdPath: cfg.get<string>('xsdPath') ?? './diff.xsd',
+    modifiedFolder: getInheritedString(cfg, 'modifiedFolder') || (mainFolderRole === 'modified' ? '.' : ''),
+    diffFolder: getInheritedString(cfg, 'diffFolder') || (mainFolderRole === 'diff' ? '.' : ''),
+    xsdPath: getInheritedString(cfg, 'xsdPath') || './diff.xsd',
     onlyFullPath: cfg.get<boolean>('onlyFullPath') ?? false,
     useAllAttributes: cfg.get<boolean>('useAllAttributes') ?? false,
-    ignoreDiffInAttribute: cfg.get<string | null>('ignoreDiffInAttribute') ?? null,
+    ignoreDiffInAttribute: getInheritedString(cfg, 'ignoreDiffInAttribute') || null,
     reflectToMainFolder: cfg.get<boolean>('reflectToMainFolder') ?? true,
     passOtherFiles: cfg.get<boolean>('passOtherFiles') ?? true,
     showDiffEditorOnSave: cfg.get<boolean>('showDiffEditorOnSave') ?? false,
@@ -195,13 +195,13 @@ function readGlobalConfig(outputChannel: vscode.OutputChannel): WatcherConfig | 
   const cfg = vscode.workspace.getConfiguration('xmlDiffAndPatch');
   const data: DiskConfigFile = {
     mainFolderRole: cfg.get<'modified' | 'diff'>('mainFolderRole') ?? 'modified',
-    originalFolder: cfg.get<string>('originalFolder') ?? '',
-    modifiedFolder: cfg.get<string>('modifiedFolder') ?? '',
-    diffFolder: cfg.get<string>('diffFolder') ?? '',
-    xsdPath: cfg.get<string>('xsdPath') ?? './diff.xsd',
+    originalFolder: getInheritedString(cfg, 'originalFolder'),
+    modifiedFolder: getInheritedString(cfg, 'modifiedFolder'),
+    diffFolder: getInheritedString(cfg, 'diffFolder'),
+    xsdPath: getInheritedString(cfg, 'xsdPath') || './diff.xsd',
     onlyFullPath: cfg.get<boolean>('onlyFullPath') ?? false,
     useAllAttributes: cfg.get<boolean>('useAllAttributes') ?? false,
-    ignoreDiffInAttribute: cfg.get<string | null>('ignoreDiffInAttribute') ?? null,
+    ignoreDiffInAttribute: getInheritedString(cfg, 'ignoreDiffInAttribute') || null,
     reflectToMainFolder: cfg.get<boolean>('reflectToMainFolder') ?? true,
     passOtherFiles: cfg.get<boolean>('passOtherFiles') ?? true,
     showDiffEditorOnSave: cfg.get<boolean>('showDiffEditorOnSave') ?? false,
@@ -309,6 +309,28 @@ function buildConfig(
 function resolvePath(p: string, root: string): string {
   if (!p) return '';
   return path.isAbsolute(p) ? p : path.resolve(root, p);
+}
+
+/**
+ * Reads a string setting by walking from the most specific scope to the most
+ * general, skipping explicitly-empty-string values at lower scopes.  This
+ * ensures a user-level (global) value is honoured even when a workspace or
+ * folder config leaves the field blank.
+ *
+ * Rule: path / string values inherit from upper levels when empty;
+ *       booleans and enums use cfg.get() (VS Code's normal precedence).
+ */
+function getInheritedString(cfg: vscode.WorkspaceConfiguration, key: string): string {
+  const ins = cfg.inspect<string>(key);
+  for (const v of [
+    ins?.workspaceFolderValue,
+    ins?.workspaceValue,
+    ins?.globalValue,
+    ins?.defaultValue,
+  ]) {
+    if (v !== undefined && v !== '') return v;
+  }
+  return '';
 }
 
 /** Returns true if any trigger setting has an explicit value at the workspace-folder scope. */

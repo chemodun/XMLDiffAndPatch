@@ -3,9 +3,7 @@
     { "path": "." }
   ],
   "settings": {
-    "xmlDiffAndPatch.originalFolder": "",
     "xmlDiffAndPatch.mainFolderRole": "modified",
-    "xmlDiffAndPatch.modifiedFolder": "",
     "xmlDiffAndPatch.diffFolder": "diff"
   }
 }
