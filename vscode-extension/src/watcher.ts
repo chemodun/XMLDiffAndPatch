@@ -148,13 +148,18 @@ export class WatcherManager {
 
     this.logger.debug(`Save event: '${filePath}' relMain=${relMain ?? 'n/a'} relSecondary=${relSecondary ?? 'n/a'}`);
 
-    if (relMain !== null) {
+    // Check secondary FIRST: the secondary folder may be a subdirectory of the
+    // main folder (e.g. diff/ inside the mod root).  A file that is under the
+    // secondary folder must never be processed as a main-folder event.
+    if (relSecondary !== null) {
+      if (this.config.reflectToMainFolder) {
+        this.processFile(filePath, relSecondary, 'secondary', mainFolder, secondaryFolder).catch(
+          (err) => this.logger.error(`Unhandled error processing '${filePath}': ${err}`)
+        );
+      }
+    } else if (relMain !== null) {
       this.processFile(filePath, relMain, 'main', mainFolder, secondaryFolder).catch((err) =>
         this.logger.error(`Unhandled error processing '${filePath}': ${err}`)
-      );
-    } else if (relSecondary !== null && this.config.reflectToMainFolder) {
-      this.processFile(filePath, relSecondary, 'secondary', mainFolder, secondaryFolder).catch(
-        (err) => this.logger.error(`Unhandled error processing '${filePath}': ${err}`)
       );
     }
   }
