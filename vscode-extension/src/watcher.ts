@@ -492,6 +492,80 @@ export class WatcherManager {
     return isValid;
   }
 
+  // ─── Explorer command API ─────────────────────────────────────────────────
+
+  /**
+   * Returns the folder role ('modified' or 'diff') for the given absolute file
+   * path within this watcher's config, or null if the file is not covered.
+   * When both folders match (diff nested inside modified or vice-versa), the
+   * deeper (more-specific) folder wins.
+   */
+  getFileRole(filePath: string): { role: 'modified' | 'diff'; relPath: string } | null {
+    const relModified = getRelativePath(filePath, this.config.modifiedFolder);
+    const relDiff = getRelativePath(filePath, this.config.diffFolder);
+
+    if (relModified !== null && relDiff !== null) {
+      return this.config.diffFolder.length > this.config.modifiedFolder.length
+        ? { role: 'diff', relPath: relDiff }
+        : { role: 'modified', relPath: relModified };
+    }
+    if (relDiff !== null) return { role: 'diff', relPath: relDiff };
+    if (relModified !== null) return { role: 'modified', relPath: relModified };
+    return null;
+  }
+
+  /** Copies the original file over the modified file ("Reset to Original"). */
+  async runResetToOriginal(relPath: string): Promise<boolean> {
+    const originalPath = this.config.pathPrefix
+      ? path.join(this.config.originalFolder, this.config.pathPrefix, relPath)
+      : path.join(this.config.originalFolder, relPath);
+    if (!fsSync.existsSync(originalPath)) {
+      this.logger.warn(`[ResetToOriginal] No original for '${relPath}' — skipped.`);
+      return false;
+    }
+    const modifiedPath = path.join(this.config.modifiedFolder, relPath);
+    await this.writeCopy(originalPath, modifiedPath);
+    return true;
+  }
+
+  /** Applies the existing diff file to the original to regenerate the modified file ("Reconstruct from Diff"). */
+  async runReconstructFromDiff(relPath: string): Promise<boolean> {
+    const originalPath = this.config.pathPrefix
+      ? path.join(this.config.originalFolder, this.config.pathPrefix, relPath)
+      : path.join(this.config.originalFolder, relPath);
+    if (!fsSync.existsSync(originalPath)) {
+      this.logger.warn(`[ReconstructFromDiff] No original for '${relPath}' — skipped.`);
+      return false;
+    }
+    const diffPath = path.join(this.config.diffFolder, relPath);
+    if (!fsSync.existsSync(diffPath)) {
+      this.logger.warn(`[ReconstructFromDiff] No diff file for '${relPath}' — skipped.`);
+      return false;
+    }
+    const modifiedPath = path.join(this.config.modifiedFolder, relPath);
+    await this.writePatch(originalPath, diffPath, modifiedPath);
+    return true;
+  }
+
+  /** Regenerates the diff by comparing the current modified file against the original ("Regenerate Diff"). */
+  async runRegenerateDiff(relPath: string): Promise<boolean> {
+    const originalPath = this.config.pathPrefix
+      ? path.join(this.config.originalFolder, this.config.pathPrefix, relPath)
+      : path.join(this.config.originalFolder, relPath);
+    if (!fsSync.existsSync(originalPath)) {
+      this.logger.warn(`[RegenerateDiff] No original for '${relPath}' — skipped.`);
+      return false;
+    }
+    const modifiedPath = path.join(this.config.modifiedFolder, relPath);
+    if (!fsSync.existsSync(modifiedPath)) {
+      this.logger.warn(`[RegenerateDiff] No modified file for '${relPath}' — skipped.`);
+      return false;
+    }
+    const diffPath = path.join(this.config.diffFolder, relPath);
+    await this.writeDiff(originalPath, modifiedPath, diffPath);
+    return true;
+  }
+
   // ─── Disposal ─────────────────────────────────────────────────────────────
 
   dispose(): void {

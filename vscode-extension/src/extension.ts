@@ -11,6 +11,7 @@ import * as vscode from 'vscode';
 import { readAllConfigs, DISK_CONFIG_FILENAME } from './config.js';
 import { WatcherManager } from './watcher.js';
 import { StatusBarManager } from './statusBar.js';
+import { registerExplorerCommands } from './commands.js';
 
 let outputChannel: vscode.OutputChannel;
 let statusBar: StatusBarManager;
@@ -30,6 +31,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       outputChannel.show();
     })
   );
+
+  // Explorer context-menu commands
+  registerExplorerCommands(context, () => watchers);
 
   // Initial setup
   await initialise();

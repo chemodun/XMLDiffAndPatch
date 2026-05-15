@@ -16,6 +16,66 @@
   "activationEvents": ["onStartupFinished"],
   "main": "./out/extension.js",
   "contributes": {
+    "submenus": [
+      {
+        "id": "x4diffandpatch.submenu",
+        "label": "X4 Diff and Patch"
+      }
+    ],
+    "commands": [
+      {
+        "command": "x4diffandpatch.resetToOriginal",
+        "title": "Reset to Original",
+        "category": "X4 Diff and Patch"
+      },
+      {
+        "command": "x4diffandpatch.reconstructFromDiff",
+        "title": "Reconstruct from Diff",
+        "category": "X4 Diff and Patch"
+      },
+      {
+        "command": "x4diffandpatch.regenerateDiff",
+        "title": "Regenerate Diff",
+        "category": "X4 Diff and Patch"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "submenu": "x4diffandpatch.submenu",
+          "group": "x4diffandpatch@1",
+          "when": "resourceExtname == .xml || explorerResourceIsFolder"
+        }
+      ],
+      "x4diffandpatch.submenu": [
+        {
+          "command": "x4diffandpatch.resetToOriginal",
+          "group": "1_modified@1"
+        },
+        {
+          "command": "x4diffandpatch.reconstructFromDiff",
+          "group": "1_modified@2"
+        },
+        {
+          "command": "x4diffandpatch.regenerateDiff",
+          "group": "2_diff@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "x4diffandpatch.resetToOriginal",
+          "when": "editorLangId == xml"
+        },
+        {
+          "command": "x4diffandpatch.reconstructFromDiff",
+          "when": "editorLangId == xml"
+        },
+        {
+          "command": "x4diffandpatch.regenerateDiff",
+          "when": "editorLangId == xml"
+        }
+      ]
+    },
     "configuration": {
       "title": "X4 Diff and Patch",
       "properties": {
