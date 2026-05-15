@@ -359,21 +359,40 @@ export class WatcherManager {
     await this.ensureDir(outputPath);
     this.outputPaths.add(outputPath);
     try {
-      await fs.copyFile(sourcePath, outputPath);
+      if (this.isInWorkspace(outputPath)) {
+        const data = await fs.readFile(sourcePath);
+        await vscode.workspace.fs.writeFile(vscode.Uri.file(outputPath), data);
+      } else {
+        await fs.copyFile(sourcePath, outputPath);
+      }
     } finally {
       setTimeout(() => this.outputPaths.delete(outputPath), 500);
     }
   }
 
-  /** Writes content to outputPath, ensuring the directory exists, with loop guard. */
+  /** Writes content to outputPath, ensuring the directory exists, with loop guard.
+   *  Uses VS Code's fs API for workspace paths so Local History (Timeline) records the change.
+   */
   private async writeOutput(outputPath: string, content: string): Promise<void> {
     await this.ensureDir(outputPath);
     this.outputPaths.add(outputPath);
     try {
-      await fs.writeFile(outputPath, content, 'utf-8');
+      if (this.isInWorkspace(outputPath)) {
+        await vscode.workspace.fs.writeFile(
+          vscode.Uri.file(outputPath),
+          Buffer.from(content, 'utf-8')
+        );
+      } else {
+        await fs.writeFile(outputPath, content, 'utf-8');
+      }
     } finally {
       setTimeout(() => this.outputPaths.delete(outputPath), 500);
     }
+  }
+
+  /** Returns true when filePath is inside one of the open workspace folders. */
+  private isInWorkspace(filePath: string): boolean {
+    return vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath)) !== undefined;
   }
 
   private async ensureDir(filePath: string): Promise<void> {
