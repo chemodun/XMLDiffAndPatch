@@ -65,8 +65,8 @@ export class DiffEngine {
         return true; // name mismatch — only valid in checkOnly context
       }
 
-      const origText = getTextValue(originalElem);
-      const modText = getTextValue(modifiedElem);
+      const origText = getTextValue(originalElem).trim();
+      const modText = getTextValue(modifiedElem).trim();
 
       if (origText !== modText) {
         if (checkOnly) {
