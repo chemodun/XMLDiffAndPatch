@@ -360,8 +360,8 @@ export class WatcherManager {
     this.outputPaths.add(outputPath);
     try {
       if (this.isInWorkspace(outputPath)) {
-        const data = await fs.readFile(sourcePath);
-        await vscode.workspace.fs.writeFile(vscode.Uri.file(outputPath), data);
+        const content = await fs.readFile(sourcePath, 'utf-8');
+        await this.writeViaWorkspaceEdit(vscode.Uri.file(outputPath), content);
       } else {
         await fs.copyFile(sourcePath, outputPath);
       }
@@ -370,23 +370,64 @@ export class WatcherManager {
     }
   }
 
-  /** Writes content to outputPath, ensuring the directory exists, with loop guard.
-   *  Uses VS Code's fs API for workspace paths so Local History (Timeline) records the change.
+  /**
+   * Writes text content to outputPath with loop guard.
+   * For workspace paths, routes through VS Code's WorkspaceEdit + workspace.save()
+   * so the text file service records a Local History entry.
+   * Falls back to direct fs.writeFile for paths outside the workspace, or if
+   * the file is already open with unsaved user edits.
    */
   private async writeOutput(outputPath: string, content: string): Promise<void> {
     await this.ensureDir(outputPath);
     this.outputPaths.add(outputPath);
     try {
       if (this.isInWorkspace(outputPath)) {
-        await vscode.workspace.fs.writeFile(
-          vscode.Uri.file(outputPath),
-          Buffer.from(content, 'utf-8')
-        );
+        await this.writeViaWorkspaceEdit(vscode.Uri.file(outputPath), content);
       } else {
         await fs.writeFile(outputPath, content, 'utf-8');
       }
     } finally {
       setTimeout(() => this.outputPaths.delete(outputPath), 500);
+    }
+  }
+
+  /**
+   * Writes content through VS Code's text file service so Local History is recorded.
+   * - New file: uses WorkspaceEdit.createFile with contents, then workspace.save().
+   * - Existing file: opens as TextDocument, applies a replace edit, then workspace.save().
+   * - Existing file with unsaved user edits: logs a warning, falls back to fs.writeFile.
+   */
+  private async writeViaWorkspaceEdit(uri: vscode.Uri, content: string): Promise<void> {
+    const filePath = uri.fsPath;
+    const edit = new vscode.WorkspaceEdit();
+
+    if (!fsSync.existsSync(filePath)) {
+      // Brand-new file — createFile with contents opens it as a dirty working copy
+      edit.createFile(uri, { contents: Buffer.from(content, 'utf-8') });
+    } else {
+      // Check whether the file is already open with unsaved user edits
+      const openDoc = vscode.workspace.textDocuments.find(
+        (d) => d.uri.fsPath.toLowerCase() === filePath.toLowerCase()
+      );
+      if (openDoc?.isDirty) {
+        this.logger.warn(
+          `[History] '${path.basename(filePath)}' has unsaved edits — writing directly (no Local History).`
+        );
+        await fs.writeFile(filePath, content, 'utf-8');
+        return;
+      }
+      // Load the existing document and replace its full content
+      const doc = await vscode.workspace.openTextDocument(uri);
+      const endPos = doc.positionAt(doc.getText().length);
+      edit.replace(uri, new vscode.Range(new vscode.Position(0, 0), endPos), content);
+    }
+
+    const applied = await vscode.workspace.applyEdit(edit);
+    if (applied) {
+      await vscode.workspace.save(uri);
+    } else {
+      this.logger.warn(`[History] WorkspaceEdit failed for '${filePath}' — falling back to direct write.`);
+      await fs.writeFile(filePath, content, 'utf-8');
     }
   }
 
