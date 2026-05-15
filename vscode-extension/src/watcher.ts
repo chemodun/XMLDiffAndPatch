@@ -149,6 +149,11 @@ export class WatcherManager {
     mainFolder: string,
     secondaryFolder: string
   ): void {
+    // Extension only processes XML files — ignore everything else immediately.
+    if (path.extname(filePath).toLowerCase() !== '.xml') {
+      return;
+    }
+
     // Loop guard
     if (this.outputPaths.has(filePath)) {
       this.logger.debug(`Loop guard: skipping own output '${filePath}'`);
