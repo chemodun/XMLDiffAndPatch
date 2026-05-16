@@ -226,8 +226,16 @@ export class DiffEngine {
             .slice(i + 1)
             .some((oc) => exactlyMatches(oc, modifiedChild));
 
+          // If original[i+1] is a close-enough match for modifiedChild (≤1 attr diff),
+          // modifiedChild belongs to original[i+1] — remove original[i] instead of replacing.
+          const nextOriginalMatchesCurrentModified =
+            i + 1 < originalChildren.length &&
+            originalChildren[i + 1].localName === modifiedChild.localName &&
+            this.compareAttributes(originalChildren[i + 1], modifiedChild, true).matchedEnough;
+
           const shouldReplace =
             !nextOriginalIsCurrentModified &&
+            !nextOriginalMatchesCurrentModified &&
             ((originalChild.localName === modifiedChild.localName &&
               Array.from(originalChild.attributes).some(
                 (a) => modifiedChild.getAttribute(a.name) === a.value
