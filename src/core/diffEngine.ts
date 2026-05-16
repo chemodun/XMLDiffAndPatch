@@ -8,7 +8,7 @@ import { DOMParser } from '@xmldom/xmldom';
 import type { Document, Element } from '@xmldom/xmldom';
 import type { DiffOptions, Logger } from './types.js';
 import { NoOpLogger } from './types.js';
-import { getTextValue, getChildElements, isElementPrecededByPosBeforeComment, getElementInfo, ELEMENT_NODE } from './xmlUtils.js';
+import { getTextValue, getChildElements, isElementPrecededByPosBeforeComment } from './xmlUtils.js';
 import { generateXPath } from './xpathGenerator.js';
 
 const NUMERIC_INDEX_PATTERN = /\[\d+\]/;
@@ -112,198 +112,150 @@ export class DiffEngine {
       return true;
     }
 
-    // ── Step 5: two-pointer child comparison ──────────────────────────────────
-    let i = 0;
-    let j = 0;
+    // ── Step 5: LCS-based child comparison ──────────────────────────────────
+    if (checkOnly) {
+      const len = Math.min(originalChildren.length, modifiedChildren.length);
+      for (let ci = 0; ci < len; ci++) {
+        if (!exactlyMatches(originalChildren[ci], modifiedChildren[ci])) return true;
+        if (this.compareElements(original, modified, diffRoot, originalChildren[ci], modifiedChildren[ci], true)) return true;
+      }
+      return false;
+    }
+
+    const editSteps = computeDiff(originalChildren, modifiedChildren);
     let lastRemovedOrReplaced = -1;
+    let s = 0;
 
-    while (i < originalChildren.length && j < modifiedChildren.length) {
-      const originalChild = originalChildren[i];
-      const modifiedChild = modifiedChildren[j];
-      let matchedEnough = false;
+    while (s < editSteps.length) {
+      const step = editSteps[s];
 
-      if (originalChild.localName === modifiedChild.localName) {
-        const { matchedEnough: attrMatched, savedOp } = this.compareAttributes(
-          originalChild,
-          modifiedChild,
-          checkOnly
-        );
-        matchedEnough = attrMatched;
-
-        if (matchedEnough && savedOp) {
-          // One attribute diff — verify children and next siblings also align.
-          const childrenMatch = !this.compareElements(
-            original,
-            modified,
-            diffRoot,
-            originalChild,
-            modifiedChild,
-            true
-          );
-
-          // Don't consume modifiedChild via a replace if it is an exact copy of a
-          // later original element — that element should match it naturally, and
-          // originalChild should be emitted as a remove instead.
-          const modifiedMatchesLaterOriginal = originalChildren
-            .slice(i + 1)
-            .some((oc) => exactlyMatches(oc, modifiedChild));
-
-          if (childrenMatch && !modifiedMatchesLaterOriginal) {
-            if (!checkOnly) {
-              this.diffRootAddOperation(diffRoot, savedOp);
-            }
-            // matchedEnough stays true
-          } else {
-            matchedEnough = false;
-          }
-        }
-      }
-
-      if (matchedEnough) {
-        if (checkOnly) {
-          if (
-            this.compareElements(
-              original,
-              modified,
-              diffRoot,
-              originalChild,
-              modifiedChild,
-              true
-            )
-          ) {
-            return true;
-          }
-        } else {
-          this.compareElements(
-            original,
-            modified,
-            diffRoot,
-            originalChild,
-            modifiedChild,
-            false
-          );
-        }
-        i++;
-        j++;
+      if (step.op === 'equal') {
+        this.compareElements(original, modified, diffRoot,
+          originalChildren[step.indexA], modifiedChildren[step.indexB], false);
+        s++;
       } else {
-        if (checkOnly) {
-          return true;
+        const deletes: number[] = [];
+        const inserts: number[] = [];
+        while (s < editSteps.length && editSteps[s].op !== 'equal') {
+          if (editSteps[s].op === 'delete') deletes.push(editSteps[s].indexA);
+          else inserts.push(editSteps[s].indexB);
+          s++;
         }
-
-        // ── Phase A: look for originalChild further ahead in modifiedChildren ──
-        let foundMatch = false;
-        for (let k = j + 1; k < modifiedChildren.length; k++) {
-          if (exactlyMatches(modifiedChildren[k], originalChild)) {
-            // modifiedChildren[j..k-1] are new → emit a single <add>
-            const addOp = this.buildAddOperation(
-              originalChildren,
-              modifiedChildren,
-              origEl,
-              i,
-              j,
-              k,
-              lastRemovedOrReplaced
-            );
-            this.diffRootAddOperation(diffRoot, addOp);
-            this.logger.info(
-              `[Operation add] ${k - j} element(s) before ${getElementInfo(originalChild)}`
-            );
-            j = k;
-            foundMatch = true;
-            break;
-          }
-        }
-
-        if (!foundMatch) {
-          // ── Phase B: decide between remove and replace ─────────────────────
-          const nextOriginalFoundLaterInModified =
-            i + 1 < originalChildren.length &&
-            modifiedChildren
-              .slice(j + 1)
-              .some((mc) => exactlyMatches(mc, originalChildren[i + 1]));
-
-          const nextOriginalIsCurrentModified = originalChildren
-            .slice(i + 1)
-            .some((oc) => exactlyMatches(oc, modifiedChild));
-
-          // If original[i+1] is a close-enough match for modifiedChild (≤1 attr diff),
-          // modifiedChild belongs to original[i+1] — remove original[i] instead of replacing.
-          const nextOriginalMatchesCurrentModified =
-            i + 1 < originalChildren.length &&
-            originalChildren[i + 1].localName === modifiedChild.localName &&
-            this.compareAttributes(originalChildren[i + 1], modifiedChild, true).matchedEnough;
-
-          const shouldReplace =
-            !nextOriginalIsCurrentModified &&
-            !nextOriginalMatchesCurrentModified &&
-            ((originalChild.localName === modifiedChild.localName &&
-              Array.from(originalChild.attributes).some(
-                (a) => modifiedChild.getAttribute(a.name) === a.value
-              )) ||
-              i + 1 === originalChildren.length ||
-              nextOriginalFoundLaterInModified);
-
-          if (shouldReplace) {
-            const xp = generateXPath(originalChild, this.options);
-            const replaceOp = this.createElement('replace');
-            replaceOp.setAttribute('sel', xp);
-            replaceOp.appendChild(this.diffDoc.importNode(modifiedChild, true));
-
-            // Bundle additional modified children that don't match the next original
-            let k = j + 1;
-            while (k < modifiedChildren.length) {
-              if (
-                i + 1 < originalChildren.length &&
-                exactlyMatches(modifiedChildren[k], originalChildren[i + 1])
-              ) {
-                break;
-              }
-              replaceOp.appendChild(this.diffDoc.importNode(modifiedChildren[k], true));
-              k++;
-            }
-
-            this.diffRootAddOperation(diffRoot, replaceOp);
-            this.logger.info(`[Operation replace] ${xp}`);
-            lastRemovedOrReplaced = i;
-            i++;
-            j = k;
-          } else {
-            const xp = generateXPath(originalChild, this.options);
-            const removeOp = this.createElement('remove');
-            removeOp.setAttribute('sel', xp);
-            this.diffRootAddOperation(diffRoot, removeOp);
-            this.logger.info(`[Operation remove] ${xp}`);
-            lastRemovedOrReplaced = i;
-            i++;
-            // j intentionally stays the same
-          }
-        }
+        const nextOrigIdx = s < editSteps.length ? editSteps[s].indexA : originalChildren.length;
+        lastRemovedOrReplaced = this.processEditBlock(
+          deletes, inserts, nextOrigIdx,
+          original, modified, originalChildren, modifiedChildren,
+          origEl, diffRoot, lastRemovedOrReplaced
+        );
       }
-    }
-
-    // ── Drain remaining original children (all removed) ───────────────────────
-    while (i < originalChildren.length) {
-      const xp = generateXPath(originalChildren[i], this.options);
-      const removeOp = this.createElement('remove');
-      removeOp.setAttribute('sel', xp);
-      this.diffRootAddOperation(diffRoot, removeOp);
-      this.logger.info(`[Operation remove] ${xp}`);
-      i++;
-    }
-
-    // ── Drain remaining modified children (all appended) ──────────────────────
-    if (j < modifiedChildren.length) {
-      const parentXPath = generateXPath(origEl, this.options);
-      const addOp = this.createElement('add');
-      addOp.setAttribute('sel', parentXPath);
-      for (let k = j; k < modifiedChildren.length; k++) {
-        addOp.appendChild(this.diffDoc.importNode(modifiedChildren[k], true));
-      }
-      this.diffRootAddOperation(diffRoot, addOp);
-      this.logger.info(`[Operation add] append to ${parentXPath}`);
     }
 
     return false;
+  }
+
+  // ─── LCS edit block processor ─────────────────────────────────────────────
+
+  /**
+   * Processes one edit block (consecutive Delete/Insert steps between two Equal anchors).
+   * Greedily pairs deletes with compatible inserts (same name + ≤1 attr diff).
+   * Returns the updated lastRemovedOrReplaced index.
+   *
+   * Port of C# DiffEngine.ProcessEditBlock.
+   */
+  private processEditBlock(
+    deletes: number[],
+    inserts: number[],
+    nextOrigIdx: number,
+    original: Document,
+    modified: Document,
+    originalChildren: Element[],
+    modifiedChildren: Element[],
+    origEl: Element,
+    diffRoot: Element,
+    lastRemovedOrReplaced: number
+  ): number {
+    const usedInserts = new Array<boolean>(inserts.length).fill(false);
+    const paired: Array<[number, number]> = [];
+    const unpairedDeletes: number[] = [];
+
+    // Greedily pair each delete with the first compatible insert (same name + ≤1 attr diff)
+    for (const origIdx of deletes) {
+      let found = false;
+      for (let ii = 0; ii < inserts.length; ii++) {
+        if (usedInserts[ii]) continue;
+        const origElem = originalChildren[origIdx];
+        const modElem = modifiedChildren[inserts[ii]];
+        if (origElem.localName === modElem.localName &&
+            this.compareAttributes(origElem, modElem, true).matchedEnough) {
+          usedInserts[ii] = true;
+          paired.push([origIdx, inserts[ii]]);
+          found = true;
+          break;
+        }
+      }
+      if (!found) unpairedDeletes.push(origIdx);
+    }
+
+    const unpairedInserts: number[] = [];
+    for (let ii = 0; ii < inserts.length; ii++) {
+      if (!usedInserts[ii]) unpairedInserts.push(inserts[ii]);
+    }
+
+    // Emit paired operations: attribute change (+ child recurse) or full replace
+    for (const [origIdx, modIdx] of paired) {
+      const origElem = originalChildren[origIdx];
+      const modElem = modifiedChildren[modIdx];
+      const { matchedEnough, savedOp } = this.compareAttributes(origElem, modElem, false);
+      if (matchedEnough) {
+        if (savedOp) {
+          this.diffRootAddOperation(diffRoot, savedOp);
+          this.logger.info(`[Operation ${savedOp.localName}] attribute: ${savedOp.getAttribute('sel')}`);
+          // Attribute was renamed — XPath identity changed, treat as unavailable for pos="after" anchoring
+          lastRemovedOrReplaced = Math.max(lastRemovedOrReplaced, origIdx);
+        }
+        this.compareElements(original, modified, diffRoot, origElem, modElem, false);
+      } else {
+        const xpath = generateXPath(origElem, this.options);
+        const replaceOp = this.createElement('replace');
+        replaceOp.setAttribute('sel', xpath);
+        replaceOp.appendChild(this.diffDoc.importNode(modElem, true));
+        this.diffRootAddOperation(diffRoot, replaceOp);
+        this.logger.info(`[Operation replace] ${xpath}`);
+        lastRemovedOrReplaced = origIdx;
+      }
+    }
+
+    // Emit unpaired removes
+    for (const origIdx of unpairedDeletes) {
+      const xpath = generateXPath(originalChildren[origIdx], this.options);
+      const removeOp = this.createElement('remove');
+      removeOp.setAttribute('sel', xpath);
+      this.diffRootAddOperation(diffRoot, removeOp);
+      this.logger.info(`[Operation remove] ${xpath}`);
+      lastRemovedOrReplaced = origIdx;
+    }
+
+    // Emit unpaired inserts as a single batched <add>
+    if (unpairedInserts.length > 0) {
+      const j = unpairedInserts[0];
+      const k = unpairedInserts[unpairedInserts.length - 1] + 1;
+
+      // Any element touched (removed OR paired/renamed) may have a stale XPath as pos="after" anchor.
+      // Use the highest touched original index so buildAddOperation can switch to pos="before".
+      let maxBlockOrigIdx = lastRemovedOrReplaced;
+      for (const [origIdx] of paired) {
+        maxBlockOrigIdx = Math.max(maxBlockOrigIdx, origIdx);
+      }
+
+      const addOp = this.buildAddOperation(
+        originalChildren, modifiedChildren, origEl,
+        nextOrigIdx, j, k, maxBlockOrigIdx
+      );
+      this.diffRootAddOperation(diffRoot, addOp);
+      this.logger.info(`[Operation add] ${unpairedInserts.length} element(s)`);
+    }
+
+    return lastRemovedOrReplaced;
   }
 
   // ─── Attribute comparison ──────────────────────────────────────────────────
@@ -435,15 +387,21 @@ export class DiffEngine {
       const prevHasNumericIndex = NUMERIC_INDEX_PATTERN.test(prevXPath);
 
       if (usePosBeforeComment || prevAnchorRemoved || prevHasNumericIndex) {
-        // Prefer pos="before" on the current original element
-        const beforeXPath = generateXPath(originalChildren[i], this.options);
-        if (!NUMERIC_INDEX_PATTERN.test(beforeXPath)) {
-          pos = 'before';
-          sel = beforeXPath;
+        if (i < originalChildren.length) {
+          // Prefer pos="before" on the current original element
+          const beforeXPath = generateXPath(originalChildren[i], this.options);
+          if (!NUMERIC_INDEX_PATTERN.test(beforeXPath)) {
+            pos = 'before';
+            sel = beforeXPath;
+          } else {
+            // Fall back to pos="after" the previous element
+            pos = 'after';
+            sel = prevXPath;
+          }
         } else {
-          // Fall back to pos="after" the previous element
-          pos = 'after';
-          sel = prevXPath;
+          // No next element + stale anchor → append to parent
+          pos = '';
+          sel = generateXPath(origEl, this.options);
         }
       } else {
         pos = 'after';
@@ -453,7 +411,7 @@ export class DiffEngine {
 
     const addOp = this.createElement('add');
     addOp.setAttribute('sel', sel);
-    addOp.setAttribute('pos', pos);
+    if (pos) addOp.setAttribute('pos', pos);
 
     for (let n = j; n < k; n++) {
       addOp.appendChild(this.diffDoc.importNode(modifiedChildren[n], true));
@@ -516,4 +474,52 @@ function exactlyMatches(a: Element, b: Element): boolean {
     }
   }
   return getTextValue(a).trim() === getTextValue(b).trim();
+}
+
+// ─── LCS edit types and helpers ──────────────────────────────────────────────
+
+type EditOp = 'equal' | 'delete' | 'insert';
+
+interface EditStep {
+  op: EditOp;
+  indexA: number;
+  indexB: number;
+}
+
+/**
+ * Computes the LCS-based edit script between two child element lists.
+ * Returns a list of equal/delete/insert steps in forward (left-to-right) order.
+ *
+ * Port of C# DiffEngine.ComputeDiff.
+ */
+function computeDiff(a: Element[], b: Element[]): EditStep[] {
+  const n = a.length;
+  const m = b.length;
+  const dp: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0));
+  for (let i = 1; i <= n; i++) {
+    for (let j = 1; j <= m; j++) {
+      dp[i][j] = exactlyMatches(a[i - 1], b[j - 1])
+        ? dp[i - 1][j - 1] + 1
+        : Math.max(dp[i - 1][j], dp[i][j - 1]);
+    }
+  }
+
+  const result: EditStep[] = [];
+  let x = n;
+  let y = m;
+  while (x > 0 || y > 0) {
+    if (x > 0 && y > 0 && exactlyMatches(a[x - 1], b[y - 1]) && dp[x][y] === dp[x - 1][y - 1] + 1) {
+      result.push({ op: 'equal', indexA: x - 1, indexB: y - 1 });
+      x--;
+      y--;
+    } else if (y > 0 && (x === 0 || dp[x][y - 1] >= dp[x - 1][y])) {
+      result.push({ op: 'insert', indexA: -1, indexB: y - 1 });
+      y--;
+    } else {
+      result.push({ op: 'delete', indexA: x - 1, indexB: -1 });
+      x--;
+    }
+  }
+  result.reverse();
+  return result;
 }
