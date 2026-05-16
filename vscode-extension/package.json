@@ -2,7 +2,7 @@
   "name": "x4diffandpatch",
   "displayName": "X4DiffAndPatch",
   "description": "Automatically generates X4-compatible XML diffs and applies XML patches on file save.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "X4DevTools",
   "author": {
     "name": "Chem O'Dun",
@@ -20,6 +20,15 @@
   "activationEvents": ["onStartupFinished"],
   "main": "./out/extension.js",
   "contributes": {
+    "views": {
+      "explorer": [
+        {
+          "type": "webview",
+          "id": "xmlDiffAndPatch.settingsPanel",
+          "name": "X4 Diff and Patch"
+        }
+      ]
+    },
     "submenus": [
       {
         "id": "x4diffandpatch.submenu",
@@ -88,15 +97,30 @@
           "default": "",
           "description": "Path to the folder containing the original (vanilla/baseline) XML files. Always required."
         },
-        "xmlDiffAndPatch.modifiedFolder": {
-          "type": "string",
-          "default": "",
-          "description": "Path to the folder that holds modified (patched) XML files. Use '.' for the workspace / config-file folder. Must differ from diffFolder."
-        },
-        "xmlDiffAndPatch.diffFolder": {
-          "type": "string",
-          "default": "",
-          "description": "Path to the folder that holds diff XML files. Must differ from modifiedFolder."
+        "xmlDiffAndPatch.folderPairs": {
+          "type": "array",
+          "default": [],
+          "description": "List of folder pairs to process. Each pair defines a modifiedFolder, diffFolder, and optional pathPrefix. At least one valid pair is required.",
+          "items": {
+            "type": "object",
+            "title": "Folder Pair",
+            "properties": {
+              "modifiedFolder": {
+                "type": "string",
+                "description": "Path to the folder holding modified XML files. Use '.' for the workspace folder. Must differ from diffFolder."
+              },
+              "diffFolder": {
+                "type": "string",
+                "description": "Path to the folder holding diff XML files. Must differ from modifiedFolder."
+              },
+              "pathPrefix": {
+                "type": "string",
+                "default": "",
+                "description": "Sub-path inserted between originalFolder and the file's relative path when looking up the original file (e.g. 'libraries')."
+              }
+            },
+            "required": ["modifiedFolder", "diffFolder"]
+          }
         },
         "xmlDiffAndPatch.xsdPath": {
           "type": "string",
@@ -177,12 +201,6 @@
           ],
           "default": "warn",
           "description": "Action when structural validation of a generated diff file fails."
-        },
-        "xmlDiffAndPatch.pathPrefix": {
-          "type": "string",
-          "default": "",
-          "description": "Sub-path inserted between originalFolder and the file's relative path when looking up the original file (e.g. 'libraries' or 'assets/libs').",
-          "scope": "resource"
         },
         "xmlDiffAndPatch.debug": {
           "type": "boolean",

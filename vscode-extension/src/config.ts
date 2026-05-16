@@ -1,35 +1,29 @@
 /**
  * Configuration reader and validator.
  *
- * Supports three sources (checked in priority order per folder):
- *   1. Disk config file (`x4diffandpatch.json`) found anywhere in the workspace
- *   2. Per-folder VS Code settings (workspace folder that has any key set at
- *      the folder scope in `.vscode/settings.json` or a `.code-workspace` file)
- *   3. Global VS Code settings (fallback when nothing else is configured)
+ * Supports two sources (checked in priority order per folder):
+ *   1. Per-folder VS Code settings (workspace folder that has `folderPairs` or
+ *      `originalFolder` set at the folder scope in `.vscode/settings.json` or
+ *      a `.code-workspace` file)
+ *   2. Global VS Code settings (fallback when nothing else is configured)
  *
- * Both `modifiedFolder` and `diffFolder` must always be configured and must
- * resolve to different paths on disk.  Either can be set to "." to refer to
- * the workspace / config-file folder itself.  They must never point to the
- * same directory.
+ * `originalFolder` must always be configured.  `folderPairs` must contain at
+ * least one valid pair where both `modifiedFolder` and `diffFolder` are set and
+ * resolve to different directories on disk.
  */
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import type { WatcherConfig, EmptyDiffBehavior, ValidationFailBehavior } from './core/types.js';
 
-// ─── Public constants ─────────────────────────────────────────────────────────
-
-/** Name of the optional on-disk config file. */
-export const DISK_CONFIG_FILENAME = 'x4diffandpatch.json';
-
-// ─── Disk config file shape ───────────────────────────────────────────────────
+// ─── Internal config shape ────────────────────────────────────────────────────
 
 /**
- * Shape of the JSON config file on disk.  All fields are optional; missing
+ * Internal shape passed to buildConfig.  All fields are optional; missing
  * values fall back to extension defaults.  Paths are resolved relative to the
- * file's containing folder.
+ * root folder.
  */
-export interface DiskConfigFile {
+interface ConfigData {
   originalFolder?: string;
   modifiedFolder?: string;
   diffFolder?: string;
@@ -49,8 +43,7 @@ export interface DiskConfigFile {
   validationFailBehavior?: ValidationFailBehavior;
   /**
    * Path segment prepended to the file's relative path when locating the
-   * original file.  Not applied to the output path.  Only honoured for
-   * disk config files; ignored for VS Code settings.
+   * original file.  Not applied to the output path.
    */
   pathPrefix?: string;
   /** Enable verbose debug logging in the output channel. */
@@ -61,99 +54,137 @@ export interface DiskConfigFile {
 
 const FOLDER_TRIGGER_KEYS = [
   'originalFolder',
-  'modifiedFolder',
-  'diffFolder',
+  'folderPairs',
 ] as const;
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-/**
- * Returns all active `WatcherConfig` instances by checking:
- *   1. Disk config files (`x4diffandpatch.json`) anywhere in the workspace
- *   2. Per-folder VS Code settings for each workspace folder
- *   3. Global VS Code settings (fallback if nothing else is found)
+/** * One-time migration: if `folderPairs` is empty at a given settings scope but
+ * the legacy `modifiedFolder` + `diffFolder` are both set there, writes them
+ * as `folderPairs[0]` and removes the old keys.  Safe to call on every start;
+ * it is a no-op once `folderPairs` is already populated.
+ */
+export async function migrateSettings(outputChannel: vscode.OutputChannel): Promise<void> {
+  // Per-folder settings (.vscode/settings.json)
+  for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    const cfg = vscode.workspace.getConfiguration('xmlDiffAndPatch', folder.uri);
+    await migrateLegacyPair(
+      cfg, `folder:${folder.name}`, vscode.ConfigurationTarget.WorkspaceFolder, outputChannel
+    );
+  }
+  // Workspace-level settings (.code-workspace)
+  if ((vscode.workspace.workspaceFolders?.length ?? 0) > 0) {
+    const cfg = vscode.workspace.getConfiguration('xmlDiffAndPatch');
+    await migrateLegacyPair(
+      cfg, 'workspace', vscode.ConfigurationTarget.Workspace, outputChannel
+    );
+  }
+  // Global user settings
+  {
+    const cfg = vscode.workspace.getConfiguration('xmlDiffAndPatch');
+    await migrateLegacyPair(
+      cfg, 'global', vscode.ConfigurationTarget.Global, outputChannel
+    );
+  }
+}
+
+async function migrateLegacyPair(
+  cfg: vscode.WorkspaceConfiguration,
+  label: string,
+  target: vscode.ConfigurationTarget,
+  outputChannel: vscode.OutputChannel
+): Promise<void> {
+  // Inspect values at the specific scope only — do not follow inheritance chain.
+  const pairsIns  = cfg.inspect<FolderPairRaw[]>('folderPairs');
+  const modIns    = cfg.inspect<string>('modifiedFolder');
+  const diffIns   = cfg.inspect<string>('diffFolder');
+  const prefixIns = cfg.inspect<string>('pathPrefix');
+
+  let existingPairs: FolderPairRaw[] | undefined;
+  let legacyMod:    string | undefined;
+  let legacyDiff:   string | undefined;
+  let legacyPrefix: string | undefined;
+
+  if (target === vscode.ConfigurationTarget.WorkspaceFolder) {
+    existingPairs = pairsIns?.workspaceFolderValue;
+    legacyMod     = modIns?.workspaceFolderValue;
+    legacyDiff    = diffIns?.workspaceFolderValue;
+    legacyPrefix  = prefixIns?.workspaceFolderValue;
+  } else if (target === vscode.ConfigurationTarget.Workspace) {
+    existingPairs = pairsIns?.workspaceValue;
+    legacyMod     = modIns?.workspaceValue;
+    legacyDiff    = diffIns?.workspaceValue;
+    legacyPrefix  = prefixIns?.workspaceValue;
+  } else {
+    existingPairs = pairsIns?.globalValue;
+    legacyMod     = modIns?.globalValue;
+    legacyDiff    = diffIns?.globalValue;
+    legacyPrefix  = prefixIns?.globalValue;
+  }
+
+  if ((existingPairs ?? []).length > 0) return; // already migrated
+  if (!legacyMod || !legacyDiff) return;         // both folders required
+
+  const newPair: FolderPairRaw = { modifiedFolder: legacyMod, diffFolder: legacyDiff };
+  if (legacyPrefix) newPair.pathPrefix = legacyPrefix;
+
+  try {
+    await cfg.update('folderPairs',     [newPair],  target);
+    await cfg.update('modifiedFolder',  undefined,  target);
+    await cfg.update('diffFolder',      undefined,  target);
+    await cfg.update('pathPrefix',      undefined,  target);
+    outputChannel.appendLine(
+      `[INFO]  [${label}] Migrated legacy modifiedFolder/diffFolder settings to folderPairs[0].`
+    );
+  } catch (err) {
+    outputChannel.appendLine(`[ERROR] [${label}] Failed to migrate legacy settings: ${err}`);
+  }
+}
+
+/** * Returns all active `WatcherConfig` instances by checking:
+ *   1. Per-folder VS Code settings for each workspace folder
+ *   2. Global VS Code settings (fallback if nothing else is found)
  */
 export async function readAllConfigs(
   outputChannel: vscode.OutputChannel
 ): Promise<WatcherConfig[]> {
   const configs: WatcherConfig[] = [];
-  const usedFolders = new Set<string>(); // normalised lower-case folder paths
 
-  // 1. Disk config files — searched anywhere in the workspace
-  const diskUris = await vscode.workspace.findFiles(
-    `**/${DISK_CONFIG_FILENAME}`,
-    '{**/node_modules/**,**/.git/**}'
-  );
-  for (const uri of diskUris) {
-    const cfg = readFromDiskFile(uri.fsPath, outputChannel);
-    if (cfg) {
-      configs.push(cfg);
-      usedFolders.add(path.dirname(uri.fsPath).toLowerCase());
-    }
-  }
-
-  // 2. Per-folder VS Code settings
+  // 1. Per-folder VS Code settings
   for (const folder of vscode.workspace.workspaceFolders ?? []) {
-    if (usedFolders.has(folder.uri.fsPath.toLowerCase())) {
-      continue; // disk config already covers this folder
-    }
     if (hasFolderScopedSettings(folder.uri)) {
-      const cfg = readFromFolderSettings(folder, outputChannel);
-      if (cfg) {
-        configs.push(cfg);
-        usedFolders.add(folder.uri.fsPath.toLowerCase());
-      }
+      configs.push(...readFromFolderSettings(folder, outputChannel));
     }
   }
 
-  // 3. Global fallback
+  // 2. Global fallback
   if (configs.length === 0) {
-    const cfg = readGlobalConfig(outputChannel);
-    if (cfg) {
-      configs.push(cfg);
-    }
+    configs.push(...readGlobalConfig(outputChannel));
   }
 
   return configs;
 }
 
-/**
- * Reads a single config from a disk JSON file.
- * Paths are resolved relative to the file's containing folder.
- */
-export function readFromDiskFile(
-  configFilePath: string,
-  outputChannel: vscode.OutputChannel
-): WatcherConfig | null {
-  const root = path.dirname(configFilePath);
-  const label = `disk:${configFilePath}`;
-  let data: DiskConfigFile;
-  try {
-    const raw = fs.readFileSync(configFilePath, 'utf-8');
-    data = JSON.parse(raw) as DiskConfigFile;
-  } catch (err) {
-    outputChannel.appendLine(`[ERROR] Failed to read/parse config file '${configFilePath}': ${err}`);
-    return null;
-  }
-
-  return buildConfig(root, data, label, 'disk-file', outputChannel);
-}
-
 // ─── Per-source readers ───────────────────────────────────────────────────────
+
+/** Raw shape of one entry in the `xmlDiffAndPatch.folderPairs` setting. */
+interface FolderPairRaw {
+  modifiedFolder?: string;
+  diffFolder?: string;
+  pathPrefix?: string;
+}
 
 /** Reads per-folder VS Code settings; paths resolve relative to the workspace folder. */
 function readFromFolderSettings(
   folder: vscode.WorkspaceFolder,
   outputChannel: vscode.OutputChannel
-): WatcherConfig | null {
+): WatcherConfig[] {
   const root = folder.uri.fsPath;
   const label = `folder:${folder.name}`;
   const cfg = vscode.workspace.getConfiguration('xmlDiffAndPatch', folder.uri);
 
-  const data: DiskConfigFile = {
+  const shared: ConfigData = {
     originalFolder: getInheritedString(cfg, 'originalFolder'),
-    modifiedFolder: getInheritedString(cfg, 'modifiedFolder'),
-    diffFolder: getInheritedString(cfg, 'diffFolder'),
     xsdPath: getInheritedString(cfg, 'xsdPath') || './diff.xsd',
     onlyFullPath: cfg.get<boolean>('onlyFullPath') ?? false,
     useAllAttributes: cfg.get<boolean>('useAllAttributes') ?? false,
@@ -166,26 +197,24 @@ function readFromFolderSettings(
     debounceMs: cfg.get<number>('debounceMs') ?? 500,
     emptyDiffBehavior: cfg.get<EmptyDiffBehavior>('emptyDiffBehavior') ?? 'delete',
     validationFailBehavior: cfg.get<ValidationFailBehavior>('validationFailBehavior') ?? 'warn',
-    pathPrefix: getInheritedString(cfg, 'pathPrefix'),
     debug: cfg.get<boolean>('debug') ?? false,
   };
 
-  return buildConfig(root, data, label, 'vscode-folder', outputChannel);
+  const pairs = cfg.get<FolderPairRaw[]>('folderPairs') ?? [];
+  return buildConfigsFromPairs(root, label, 'vscode-folder', shared, pairs, outputChannel);
 }
 
 /** Reads global VS Code settings; the first workspace folder is the path root. */
-function readGlobalConfig(outputChannel: vscode.OutputChannel): WatcherConfig | null {
+function readGlobalConfig(outputChannel: vscode.OutputChannel): WatcherConfig[] {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null;
   if (!root) {
     outputChannel.appendLine('[ERROR] No workspace folder is open. Extension will not activate.');
-    return null;
+    return [];
   }
 
   const cfg = vscode.workspace.getConfiguration('xmlDiffAndPatch');
-  const data: DiskConfigFile = {
+  const shared: ConfigData = {
     originalFolder: getInheritedString(cfg, 'originalFolder'),
-    modifiedFolder: getInheritedString(cfg, 'modifiedFolder'),
-    diffFolder: getInheritedString(cfg, 'diffFolder'),
     xsdPath: getInheritedString(cfg, 'xsdPath') || './diff.xsd',
     onlyFullPath: cfg.get<boolean>('onlyFullPath') ?? false,
     useAllAttributes: cfg.get<boolean>('useAllAttributes') ?? false,
@@ -198,18 +227,68 @@ function readGlobalConfig(outputChannel: vscode.OutputChannel): WatcherConfig | 
     debounceMs: cfg.get<number>('debounceMs') ?? 500,
     emptyDiffBehavior: cfg.get<EmptyDiffBehavior>('emptyDiffBehavior') ?? 'delete',
     validationFailBehavior: cfg.get<ValidationFailBehavior>('validationFailBehavior') ?? 'warn',
-    pathPrefix: getInheritedString(cfg, 'pathPrefix'),
     debug: cfg.get<boolean>('debug') ?? false,
   };
 
-  return buildConfig(root, data, 'global', 'vscode-global', outputChannel);
+  const pairs = cfg.get<FolderPairRaw[]>('folderPairs') ?? [];
+  return buildConfigsFromPairs(root, 'global', 'vscode-global', shared, pairs, outputChannel);
 }
 
-// ─── Core config builder ──────────────────────────────────────────────────────
+// ─── Config builders ──────────────────────────────────────────────────────────
+
+/**
+ * Validates and expands a list of raw folder pairs into WatcherConfig objects.
+ * `originalFolder` is validated once for the whole source; each pair is
+ * validated independently so one bad pair does not block the others.
+ */
+function buildConfigsFromPairs(
+  root: string,
+  label: string,
+  source: WatcherConfig['configSource'],
+  shared: ConfigData,
+  pairs: FolderPairRaw[],
+  outputChannel: vscode.OutputChannel
+): WatcherConfig[] {
+  const resolvedOriginal = resolvePath(shared.originalFolder ?? '', root);
+  if (!resolvedOriginal) {
+    const msg = `[FATAL] [${label}] originalFolder is not set. Skipping.`;
+    outputChannel.appendLine(msg);
+    vscode.window.showErrorMessage(msg);
+    return [];
+  }
+
+  if (pairs.length === 0) {
+    outputChannel.appendLine(`[WARN]  [${label}] folderPairs is empty — no folder pairs configured.`);
+    return [];
+  }
+
+  const results: WatcherConfig[] = [];
+  for (let i = 0; i < pairs.length; i++) {
+    const pair = pairs[i];
+    const pairLabel = `${label}[${i}]`;
+    if (!pair.modifiedFolder) {
+      outputChannel.appendLine(`[WARN]  [${pairLabel}] modifiedFolder is not set. Skipping pair.`);
+      continue;
+    }
+    if (!pair.diffFolder) {
+      outputChannel.appendLine(`[WARN]  [${pairLabel}] diffFolder is not set. Skipping pair.`);
+      continue;
+    }
+    const pairData: ConfigData = {
+      ...shared,
+      modifiedFolder: pair.modifiedFolder,
+      diffFolder: pair.diffFolder,
+      pathPrefix: pair.pathPrefix ?? '',
+    };
+    const wc = buildConfig(root, pairData, pairLabel, source, outputChannel);
+    if (wc) results.push(wc);
+  }
+  return results;
+}
 
 function buildConfig(
   root: string,
-  data: DiskConfigFile,
+  data: ConfigData,
   label: string,
   source: WatcherConfig['configSource'],
   outputChannel: vscode.OutputChannel

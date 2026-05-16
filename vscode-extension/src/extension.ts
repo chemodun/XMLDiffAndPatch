@@ -8,10 +8,11 @@
  * modified, or deleted anywhere in the workspace.
  */
 import * as vscode from 'vscode';
-import { readAllConfigs, DISK_CONFIG_FILENAME } from './config.js';
+import { readAllConfigs, migrateSettings } from './config.js';
 import { WatcherManager } from './watcher.js';
 import { StatusBarManager } from './statusBar.js';
 import { registerExplorerCommands } from './commands.js';
+import { SettingsPanelProvider } from './settingsPanel.js';
 
 let outputChannel: vscode.OutputChannel;
 let statusBar: StatusBarManager;
@@ -35,6 +36,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // Explorer context-menu commands
   registerExplorerCommands(context, () => watchers);
 
+  // Sidebar panel for editing folderPairs per scope
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(
+      SettingsPanelProvider.viewType,
+      new SettingsPanelProvider(outputChannel)
+    )
+  );
+
+  // Migrate legacy modifiedFolder/diffFolder/pathPrefix settings to folderPairs
+  await migrateSettings(outputChannel);
+
   // Initial setup
   await initialise();
 
@@ -47,19 +59,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
     })
   );
-
-  // Re-initialise when any x4diffandpatch.json is created, changed, or deleted
-  const cfgFileWatcher = vscode.workspace.createFileSystemWatcher(
-    `**/${DISK_CONFIG_FILENAME}`
-  );
-  const reinitFromFile = () => {
-    outputChannel.appendLine('[INFO]  Config file changed — reinitialising…');
-    void initialise();
-  };
-  cfgFileWatcher.onDidChange(reinitFromFile);
-  cfgFileWatcher.onDidCreate(reinitFromFile);
-  cfgFileWatcher.onDidDelete(reinitFromFile);
-  context.subscriptions.push(cfgFileWatcher);
 }
 
 // ─── Deactivate ───────────────────────────────────────────────────────────────
@@ -82,7 +81,7 @@ async function initialise(): Promise<void> {
 
   for (const config of configs) {
     outputChannel.appendLine(`[INFO]  ─── [${config.configLabel}] (${config.configSource}) ───`);
-    outputChannel.appendLine(`[INFO]    role     : ${config.mainFolderRole} | mode: ${config.watchMode}${config.debug ? ' | debug: on' : ''}`);
+    outputChannel.appendLine(`[INFO]    mode     : ${config.watchMode}${config.debug ? ' | debug: on' : ''}`);
     outputChannel.appendLine(`[INFO]    original : ${config.originalFolder}`);
     if (config.pathPrefix) {
       outputChannel.appendLine(`[INFO]    prefix   : ${config.pathPrefix}`);

@@ -49,7 +49,7 @@ export interface WatcherConfig {
   /** Human-readable label for log messages (e.g. "folder:MyMod" or "disk:/path/x4diffandpatch.json"). */
   configLabel: string;
   /** Where this configuration was read from. */
-  configSource: 'vscode-folder' | 'disk-file' | 'vscode-global';
+  configSource: 'vscode-folder' | 'vscode-global';
   /** When true, emit verbose debug messages to the output channel. */
   debug: boolean;
 }
