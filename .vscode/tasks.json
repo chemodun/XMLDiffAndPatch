@@ -6,7 +6,7 @@
       "type": "shell",
       "command": "npm run compile",
       "options": {
-        "cwd": "${workspaceFolder}/vscode-extension"
+        "cwd": "${workspaceFolder}"
       },
       "group": {
         "kind": "build",
@@ -19,7 +19,7 @@
       "type": "shell",
       "command": "npm run watch",
       "options": {
-        "cwd": "${workspaceFolder}/vscode-extension"
+        "cwd": "${workspaceFolder}"
       },
       "isBackground": true,
       "group": "build",

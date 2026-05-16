@@ -1,8 +1,8 @@
 {
-  "name": "x4diffandpatch",
-  "displayName": "X4DiffAndPatch",
-  "description": "Automatically generates X4-compatible XML diffs and applies XML patches on file save.",
-  "version": "0.3.0",
+  "name": "xmldiffandpatch",
+  "displayName": "XML Diff and Patch",
+  "description": "Generates and applies RFC 5261-compatible XML patch files using XPath selectors. Watches modified XML files and automatically produces diffs on save.",
+  "version": "0.4.0",
   "publisher": "X4DevTools",
   "author": {
     "name": "Chem O'Dun",
@@ -16,8 +16,12 @@
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["Other"],
-  "activationEvents": ["onStartupFinished"],
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "views": {
@@ -25,72 +29,72 @@
         {
           "type": "webview",
           "id": "xmlDiffAndPatch.settingsPanel",
-          "name": "X4 Diff and Patch"
+          "name": "XML Diff and Patch"
         }
       ]
     },
     "submenus": [
       {
-        "id": "x4diffandpatch.submenu",
-        "label": "X4 Diff and Patch"
+        "id": "xmldiffandpatch.submenu",
+        "label": "XML Diff and Patch"
       }
     ],
     "commands": [
       {
-        "command": "x4diffandpatch.resetToOriginal",
+        "command": "xmldiffandpatch.resetToOriginal",
         "title": "Reset to Original",
-        "category": "X4 Diff and Patch"
+        "category": "XML Diff and Patch"
       },
       {
-        "command": "x4diffandpatch.reconstructFromDiff",
+        "command": "xmldiffandpatch.reconstructFromDiff",
         "title": "Reconstruct from Diff",
-        "category": "X4 Diff and Patch"
+        "category": "XML Diff and Patch"
       },
       {
-        "command": "x4diffandpatch.regenerateDiff",
+        "command": "xmldiffandpatch.regenerateDiff",
         "title": "Regenerate Diff",
-        "category": "X4 Diff and Patch"
+        "category": "XML Diff and Patch"
       }
     ],
     "menus": {
       "explorer/context": [
         {
-          "submenu": "x4diffandpatch.submenu",
-          "group": "x4diffandpatch@1",
+          "submenu": "xmldiffandpatch.submenu",
+          "group": "xmldiffandpatch@1",
           "when": "resourceExtname == .xml || explorerResourceIsFolder"
         }
       ],
-      "x4diffandpatch.submenu": [
+      "xmldiffandpatch.submenu": [
         {
-          "command": "x4diffandpatch.resetToOriginal",
+          "command": "xmldiffandpatch.resetToOriginal",
           "group": "1_modified@1"
         },
         {
-          "command": "x4diffandpatch.reconstructFromDiff",
+          "command": "xmldiffandpatch.reconstructFromDiff",
           "group": "1_modified@2"
         },
         {
-          "command": "x4diffandpatch.regenerateDiff",
+          "command": "xmldiffandpatch.regenerateDiff",
           "group": "2_diff@1"
         }
       ],
       "commandPalette": [
         {
-          "command": "x4diffandpatch.resetToOriginal",
+          "command": "xmldiffandpatch.resetToOriginal",
           "when": "editorLangId == xml"
         },
         {
-          "command": "x4diffandpatch.reconstructFromDiff",
+          "command": "xmldiffandpatch.reconstructFromDiff",
           "when": "editorLangId == xml"
         },
         {
-          "command": "x4diffandpatch.regenerateDiff",
+          "command": "xmldiffandpatch.regenerateDiff",
           "when": "editorLangId == xml"
         }
       ]
     },
     "configuration": {
-      "title": "X4 Diff and Patch",
+      "title": "XML Diff and Patch",
       "properties": {
         "xmlDiffAndPatch.originalFolder": {
           "type": "string",
@@ -119,7 +123,10 @@
                 "description": "Sub-path inserted between originalFolder and the file's relative path when looking up the original file (e.g. 'libraries')."
               }
             },
-            "required": ["modifiedFolder", "diffFolder"]
+            "required": [
+              "modifiedFolder",
+              "diffFolder"
+            ]
           }
         },
         "xmlDiffAndPatch.xsdPath": {
@@ -138,7 +145,10 @@
           "description": "If true, include all attributes in XPath predicates regardless of uniqueness."
         },
         "xmlDiffAndPatch.ignoreDiffInAttribute": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "default": null,
           "description": "Attribute name to ignore when comparing elements (e.g. 'version'). null = no attribute ignored."
         },
@@ -164,7 +174,11 @@
         },
         "xmlDiffAndPatch.watchMode": {
           "type": "string",
-          "enum": ["onSave", "onTheFly", "contextMenuOnly"],
+          "enum": [
+            "onSave",
+            "onTheFly",
+            "contextMenuOnly"
+          ],
           "enumDescriptions": [
             "Trigger processing only on explicit VS Code save (Ctrl+S).",
             "Trigger processing on any file-system change, with debounce.",
@@ -181,7 +195,12 @@
         },
         "xmlDiffAndPatch.emptyDiffBehavior": {
           "type": "string",
-          "enum": ["write", "delete", "warn", "warnDelete"],
+          "enum": [
+            "write",
+            "delete",
+            "warn",
+            "warnDelete"
+          ],
           "enumDescriptions": [
             "Write the empty diff file to the output folder.",
             "Delete the output file if it already exists (silent).",
@@ -193,7 +212,11 @@
         },
         "xmlDiffAndPatch.validationFailBehavior": {
           "type": "string",
-          "enum": ["warn", "error", "off"],
+          "enum": [
+            "warn",
+            "error",
+            "off"
+          ],
           "enumDescriptions": [
             "Log a warning but still write the diff file.",
             "Log an error and skip writing the diff file.",
@@ -220,7 +243,7 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
-    "esbuild": "^0.20.0",
+    "esbuild": "^0.28.0",
     "typescript": "^5.3.0"
   },
   "dependencies": {

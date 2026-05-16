@@ -1,13 +1,13 @@
 /**
- * Explorer context-menu commands for X4 Diff and Patch.
+ * Explorer context-menu commands for XML Diff and Patch.
  *
  * Three commands are registered here; all accept the standard VS Code explorer
  * multi-selection arguments (uri, uri[]).  When invoked from the command
  * palette (no arguments) the active editor document is used.
  *
- *  x4diffandpatch.resetToOriginal     — copies original file(s) over modified
- *  x4diffandpatch.reconstructFromDiff — applies diff(s) to original → modified
- *  x4diffandpatch.regenerateDiff      — diffs modified against original → diff
+ *  xmldiffandpatch.resetToOriginal     — copies original file(s) over modified
+ *  xmldiffandpatch.reconstructFromDiff — applies diff(s) to original → modified
+ *  xmldiffandpatch.regenerateDiff      — diffs modified against original → diff
  */
 import * as vscode from 'vscode';
 import * as path from 'path';
@@ -91,7 +91,7 @@ async function executeOperation(
 
   if (allFiles.length === 0 && orphanTargets.length === 0) {
     vscode.window.showInformationMessage(
-      'X4 Diff and Patch: No XML files found in the selection.'
+      'XML Diff and Patch: No XML files found in the selection.'
     );
     return;
   }
@@ -101,7 +101,7 @@ async function executeOperation(
   await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: `X4 Diff and Patch: ${OP_TITLE[op]}…`,
+      title: `XML Diff and Patch: ${OP_TITLE[op]}…`,
       cancellable: false,
     },
     async (progress) => {
@@ -156,8 +156,8 @@ async function executeOperation(
       if (orphansDeleted > 0) parts.push(`${orphansDeleted} orphan diff(s) deleted`);
 
       const msg = parts.length > 0
-        ? `X4 Diff and Patch: ${parts.join(', ')}.`
-        : 'X4 Diff and Patch: No applicable files found.';
+        ? `XML Diff and Patch: ${parts.join(', ')}.`
+        : 'XML Diff and Patch: No applicable files found.';
       vscode.window.showInformationMessage(msg);
     }
   );
@@ -186,7 +186,7 @@ export function registerExplorerCommands(
 
           if (uris.length === 0) {
             vscode.window.showWarningMessage(
-              'X4 Diff and Patch: No file or folder selected.'
+              'XML Diff and Patch: No file or folder selected.'
             );
             return;
           }
@@ -197,7 +197,7 @@ export function registerExplorerCommands(
     );
   };
 
-  register('x4diffandpatch.resetToOriginal', 'resetToOriginal');
-  register('x4diffandpatch.reconstructFromDiff', 'reconstructFromDiff');
-  register('x4diffandpatch.regenerateDiff', 'regenerateDiff');
+  register('xmldiffandpatch.resetToOriginal', 'resetToOriginal');
+  register('xmldiffandpatch.reconstructFromDiff', 'reconstructFromDiff');
+  register('xmldiffandpatch.regenerateDiff', 'regenerateDiff');
 }

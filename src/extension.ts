@@ -4,8 +4,7 @@
  * Wires together config reading, validation, watcher setup, status bar,
  * and output channel.  Supports multiple independent watcher instances —
  * one per workspace folder or on-disk config file.  Re-initialises when
- * VS Code settings change or an `x4diffandpatch.json` file is created,
- * modified, or deleted anywhere in the workspace.
+ * VS Code settings change.
  */
 import * as vscode from 'vscode';
 import { readAllConfigs, migrateSettings } from './config.js';
@@ -21,7 +20,7 @@ let watchers: WatcherManager[] = [];
 // ─── Activate ─────────────────────────────────────────────────────────────────
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  outputChannel = vscode.window.createOutputChannel('X4 Diff and Patch');
+  outputChannel = vscode.window.createOutputChannel('XML Diff and Patch');
   statusBar = new StatusBarManager();
 
   context.subscriptions.push(outputChannel, statusBar);
@@ -75,7 +74,7 @@ async function initialise(): Promise<void> {
   const configs = await readAllConfigs(outputChannel);
 
   if (configs.length === 0) {
-    statusBar.setState('error', 'X4 Diff+Patch: not configured — click to view output');
+    statusBar.setState('error', 'XML Diff+Patch: not configured — click to view output');
     return;
   }
 

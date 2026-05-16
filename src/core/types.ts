@@ -46,7 +46,7 @@ export interface WatcherConfig {
    * Empty string means no prefix.
    */
   pathPrefix: string;
-  /** Human-readable label for log messages (e.g. "folder:MyMod" or "disk:/path/x4diffandpatch.json"). */
+  /** Human-readable label for log messages (e.g. "folder:MyMod" or "global"). */
   configLabel: string;
   /** Where this configuration was read from. */
   configSource: 'vscode-folder' | 'vscode-global';
