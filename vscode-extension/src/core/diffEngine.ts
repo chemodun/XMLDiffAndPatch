@@ -141,13 +141,6 @@ export class DiffEngine {
             true
           );
 
-          const siblingsAlign =
-            i + 1 === originalChildren.length ||
-            j + 1 === modifiedChildren.length ||
-            (originalChildren[i + 1].localName === modifiedChildren[j + 1].localName &&
-              this.compareAttributes(originalChildren[i + 1], modifiedChildren[j + 1], true)
-                .matchedEnough);
-
           // Don't consume modifiedChild via a replace if it is an exact copy of a
           // later original element — that element should match it naturally, and
           // originalChild should be emitted as a remove instead.
@@ -155,7 +148,7 @@ export class DiffEngine {
             .slice(i + 1)
             .some((oc) => exactlyMatches(oc, modifiedChild));
 
-          if (childrenMatch && siblingsAlign && !modifiedMatchesLaterOriginal) {
+          if (childrenMatch && !modifiedMatchesLaterOriginal) {
             if (!checkOnly) {
               this.diffRootAddOperation(diffRoot, savedOp);
             }
@@ -383,7 +376,7 @@ export class DiffEngine {
             return { matchedEnough: true, savedOp: null }; // has diff but ≤1 total
           }
           differencesCount++;
-          if (differencesCount > 1 || originalAttrs.size === 1) {
+          if (differencesCount > 1) {
             matchedEnough = false;
             break;
           }
@@ -514,5 +507,5 @@ function exactlyMatches(a: Element, b: Element): boolean {
       return false;
     }
   }
-  return true;
+  return getTextValue(a).trim() === getTextValue(b).trim();
 }
