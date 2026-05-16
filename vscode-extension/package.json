@@ -2,7 +2,7 @@
   "name": "x4diffandpatch",
   "displayName": "X4DiffAndPatch",
   "description": "Automatically generates X4-compatible XML diffs and applies XML patches on file save.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "X4DevTools",
   "author": {
     "name": "Chem O'Dun",

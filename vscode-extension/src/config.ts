@@ -14,6 +14,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as fsAsync from 'fs/promises';
 import type { WatcherConfig, EmptyDiffBehavior, ValidationFailBehavior } from './core/types.js';
 
 // ─── Internal config shape ────────────────────────────────────────────────────
@@ -153,13 +154,13 @@ export async function readAllConfigs(
   // 1. Per-folder VS Code settings
   for (const folder of vscode.workspace.workspaceFolders ?? []) {
     if (hasFolderScopedSettings(folder.uri)) {
-      configs.push(...readFromFolderSettings(folder, outputChannel));
+      configs.push(...await readFromFolderSettings(folder, outputChannel));
     }
   }
 
   // 2. Global fallback
   if (configs.length === 0) {
-    configs.push(...readGlobalConfig(outputChannel));
+    configs.push(...await readGlobalConfig(outputChannel));
   }
 
   return configs;
@@ -175,10 +176,10 @@ interface FolderPairRaw {
 }
 
 /** Reads per-folder VS Code settings; paths resolve relative to the workspace folder. */
-function readFromFolderSettings(
+async function readFromFolderSettings(
   folder: vscode.WorkspaceFolder,
   outputChannel: vscode.OutputChannel
-): WatcherConfig[] {
+): Promise<WatcherConfig[]> {
   const root = folder.uri.fsPath;
   const label = `folder:${folder.name}`;
   const cfg = vscode.workspace.getConfiguration('xmlDiffAndPatch', folder.uri);
@@ -201,11 +202,11 @@ function readFromFolderSettings(
   };
 
   const pairs = cfg.get<FolderPairRaw[]>('folderPairs') ?? [];
-  return buildConfigsFromPairs(root, label, 'vscode-folder', shared, pairs, outputChannel);
+  return await buildConfigsFromPairs(root, label, 'vscode-folder', shared, pairs, outputChannel);
 }
 
 /** Reads global VS Code settings; the first workspace folder is the path root. */
-function readGlobalConfig(outputChannel: vscode.OutputChannel): WatcherConfig[] {
+async function readGlobalConfig(outputChannel: vscode.OutputChannel): Promise<WatcherConfig[]> {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null;
   if (!root) {
     outputChannel.appendLine('[ERROR] No workspace folder is open. Extension will not activate.');
@@ -231,7 +232,7 @@ function readGlobalConfig(outputChannel: vscode.OutputChannel): WatcherConfig[] 
   };
 
   const pairs = cfg.get<FolderPairRaw[]>('folderPairs') ?? [];
-  return buildConfigsFromPairs(root, 'global', 'vscode-global', shared, pairs, outputChannel);
+  return await buildConfigsFromPairs(root, 'global', 'vscode-global', shared, pairs, outputChannel);
 }
 
 // ─── Config builders ──────────────────────────────────────────────────────────
@@ -240,21 +241,46 @@ function readGlobalConfig(outputChannel: vscode.OutputChannel): WatcherConfig[] 
  * Validates and expands a list of raw folder pairs into WatcherConfig objects.
  * `originalFolder` is validated once for the whole source; each pair is
  * validated independently so one bad pair does not block the others.
+ *
+ * Both `originalFolder` and each pair's `modifiedFolder` / `diffFolder` may
+ * contain `*`, `?`, or `**` glob wildcards.  The wildcards are expanded
+ * against the filesystem before validation:
+ *
+ *  - `originalFolder`: glob is expanded; the **first** alphabetical match is
+ *    used (a warning is logged when multiple directories match).
+ *  - `modifiedFolder` + `diffFolder`: each is expanded independently; the two
+ *    result lists must have the same length — they are then **zipped** into
+ *    individual WatcherConfig entries.
  */
-function buildConfigsFromPairs(
+async function buildConfigsFromPairs(
   root: string,
   label: string,
   source: WatcherConfig['configSource'],
   shared: ConfigData,
   pairs: FolderPairRaw[],
   outputChannel: vscode.OutputChannel
-): WatcherConfig[] {
-  const resolvedOriginal = resolvePath(shared.originalFolder ?? '', root);
-  if (!resolvedOriginal) {
+): Promise<WatcherConfig[]> {
+  // ── Resolve and glob-expand originalFolder ─────────────────────────────────
+  const rawOriginal = resolvePath(shared.originalFolder ?? '', root);
+  if (!rawOriginal) {
     const msg = `[FATAL] [${label}] originalFolder is not set. Skipping.`;
     outputChannel.appendLine(msg);
     vscode.window.showErrorMessage(msg);
     return [];
+  }
+  const expandedOriginals = await expandGlobDirs(rawOriginal);
+  if (expandedOriginals.length === 0) {
+    const msg = `[FATAL] [${label}] originalFolder glob matched no directories: ${rawOriginal}. Skipping.`;
+    outputChannel.appendLine(msg);
+    vscode.window.showErrorMessage(msg);
+    return [];
+  }
+  const resolvedOriginal = expandedOriginals[0];
+  if (expandedOriginals.length > 1) {
+    outputChannel.appendLine(
+      `[WARN]  [${label}] originalFolder glob matched ${expandedOriginals.length} directories; ` +
+      `using first: ${resolvedOriginal}`
+    );
   }
 
   if (pairs.length === 0) {
@@ -274,14 +300,47 @@ function buildConfigsFromPairs(
       outputChannel.appendLine(`[WARN]  [${pairLabel}] diffFolder is not set. Skipping pair.`);
       continue;
     }
-    const pairData: ConfigData = {
-      ...shared,
-      modifiedFolder: pair.modifiedFolder,
-      diffFolder: pair.diffFolder,
-      pathPrefix: pair.pathPrefix ?? '',
-    };
-    const wc = buildConfig(root, pairData, pairLabel, source, outputChannel);
-    if (wc) results.push(wc);
+
+    const rawMod  = resolvePath(pair.modifiedFolder, root);
+    const rawDiff = resolvePath(pair.diffFolder, root);
+
+    const expandedMod  = await expandGlobDirs(rawMod);
+    const expandedDiff = await expandGlobDirs(rawDiff);
+
+    if (hasGlobChars(rawMod) && expandedMod.length === 0) {
+      outputChannel.appendLine(
+        `[WARN]  [${pairLabel}] modifiedFolder glob matched no directories: ${rawMod}. Skipping pair.`
+      );
+      continue;
+    }
+    if (hasGlobChars(rawDiff) && expandedDiff.length === 0) {
+      outputChannel.appendLine(
+        `[WARN]  [${pairLabel}] diffFolder glob matched no directories: ${rawDiff}. Skipping pair.`
+      );
+      continue;
+    }
+    if (expandedMod.length !== expandedDiff.length) {
+      outputChannel.appendLine(
+        `[WARN]  [${pairLabel}] modifiedFolder glob matched ${expandedMod.length} ` +
+        `director${expandedMod.length === 1 ? 'y' : 'ies'} but diffFolder glob matched ` +
+        `${expandedDiff.length} — counts must match for zipping. Skipping pair.`
+      );
+      continue;
+    }
+
+    // Zip the expanded lists into individual WatcherConfig entries
+    for (let j = 0; j < expandedMod.length; j++) {
+      const subLabel = expandedMod.length > 1 ? `${pairLabel}[${j}]` : pairLabel;
+      const pairData: ConfigData = {
+        ...shared,
+        originalFolder: resolvedOriginal,
+        modifiedFolder: expandedMod[j],
+        diffFolder:     expandedDiff[j],
+        pathPrefix: pair.pathPrefix ?? '',
+      };
+      const wc = buildConfig(root, pairData, subLabel, source, outputChannel);
+      if (wc) results.push(wc);
+    }
   }
   return results;
 }
@@ -377,6 +436,99 @@ function buildConfig(
 function resolvePath(p: string, root: string): string {
   if (!p) return '';
   return path.isAbsolute(p) ? p : path.resolve(root, p);
+}
+
+// ─── Glob expansion ───────────────────────────────────────────────────────────
+
+const GLOB_CHARS_RE = /[*?[{]/;
+
+function hasGlobChars(p: string): boolean {
+  return GLOB_CHARS_RE.test(p);
+}
+
+/**
+ * Expands a path that may contain `*` / `?` / `**` wildcards into an array of
+ * existing **directory** paths, sorted alphabetically.  Paths without glob
+ * characters are returned as-is in a single-element array (no I/O).
+ *
+ * Rules:
+ *   `*`  — any sequence of chars that does not include a path separator
+ *   `?`  — any single char that is not a path separator
+ *   `**` — zero or more directory levels
+ */
+async function expandGlobDirs(pattern: string): Promise<string[]> {
+  if (!hasGlobChars(pattern)) return [pattern];
+
+  const parts = pattern.split(/[\\/]/);
+
+  // Separate the static prefix (before the first glob segment)
+  let staticCount = 0;
+  for (let i = 0; i < parts.length; i++) {
+    if (hasGlobChars(parts[i])) break;
+    staticCount++;
+  }
+
+  // Reconstruct base using the platform separator so Windows drive roots
+  // like ["C:", "Games"] join correctly into "C:\Games".
+  const base =
+    staticCount === 0
+      ? path.isAbsolute(pattern)
+        ? path.parse(pattern).root   // e.g. "/" or "C:\\"
+        : '.'
+      : parts.slice(0, staticCount).join(path.sep);
+
+  return matchGlobParts(base, parts.slice(staticCount));
+}
+
+async function matchGlobParts(base: string, remaining: string[]): Promise<string[]> {
+  if (remaining.length === 0) {
+    try {
+      return (await fsAsync.stat(base)).isDirectory() ? [base] : [];
+    } catch { return []; }
+  }
+
+  const [head, ...tail] = remaining;
+
+  // `**` — match zero-or-more directory levels
+  if (head === '**') {
+    const results: string[] = [];
+    // Zero levels: skip ** and continue
+    results.push(...await matchGlobParts(base, tail));
+    // One-or-more levels: recurse into each subdirectory keeping **
+    try {
+      for (const e of (await fsAsync.readdir(base, { withFileTypes: true }))
+                        .filter(e => e.isDirectory())
+                        .sort((a, b) => a.name.localeCompare(b.name))) {
+        results.push(...await matchGlobParts(path.join(base, e.name), remaining));
+      }
+    } catch { /* unreadable — skip */ }
+    return results;
+  }
+
+  // Wildcard segment: build regex from the pattern segment
+  const regex = segmentToRegex(head);
+  try {
+    const results: string[] = [];
+    for (const e of (await fsAsync.readdir(base, { withFileTypes: true }))
+                      .filter(e => e.isDirectory() && regex.test(e.name))
+                      .sort((a, b) => a.name.localeCompare(b.name))) {
+      const child = path.join(base, e.name);
+      if (tail.length === 0) {
+        results.push(child);
+      } else {
+        results.push(...await matchGlobParts(child, tail));
+      }
+    }
+    return results;
+  } catch { return []; }
+}
+
+function segmentToRegex(segment: string): RegExp {
+  const reStr = segment
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&') // escape regex metacharacters
+    .replace(/\*/g, '[^\\\\/]*')           // * → any chars except path separator
+    .replace(/\?/g, '[^\\\\/]');           // ? → any single char except separator
+  return new RegExp(`^${reStr}$`, process.platform === 'win32' ? 'i' : undefined);
 }
 
 /**
