@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a1f3a"/>
+      <stop offset="100%" stop-color="#0d0f1e"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2.2" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="128" height="128" rx="16" fill="url(#bg)"/>
+
+  <!-- ── Left document (original) ── -->
+  <path d="M 7,15 H 33 L 47,29 V 80 H 7 Z"
+        fill="#1c2a40" stroke="#3a5268" stroke-width="1.5" stroke-linejoin="round"/>
+  <!-- Fold crease lines -->
+  <path d="M 33,15 V 29 H 47" fill="none" stroke="#3a5268" stroke-width="1.5"/>
+  <!-- Fold shadow triangle -->
+  <path d="M 33,15 L 33,29 L 47,29 Z" fill="#243650" opacity="0.55"/>
+  <!-- Content lines (original, muted blue-gray) -->
+  <rect x="12" y="36" width="27" height="3"  rx="1.5" fill="#4a6880"/>
+  <rect x="16" y="44" width="19" height="3"  rx="1.5" fill="#3a5870" opacity="0.8"/>
+  <rect x="12" y="52" width="25" height="3"  rx="1.5" fill="#4a6880"/>
+  <rect x="16" y="60" width="15" height="3"  rx="1.5" fill="#3a5870" opacity="0.7"/>
+  <rect x="12" y="68" width="23" height="3"  rx="1.5" fill="#4a6880"/>
+
+  <!-- ── Centre: arrow (glowing cyan) ── -->
+  <path d="M 53,47 H 63 V 42 L 74,51 L 63,60 V 55 H 53 Z"
+        fill="#00bcd4" filter="url(#glow)"/>
+
+  <!-- ── Right document (patched) ── -->
+  <path d="M 81,15 H 107 L 121,29 V 80 H 81 Z"
+        fill="#1c2a40" stroke="#00bcd4" stroke-width="1.5" stroke-linejoin="round"/>
+  <!-- Fold crease lines -->
+  <path d="M 107,15 V 29 H 121" fill="none" stroke="#00bcd4" stroke-width="1.5"/>
+  <!-- Fold shadow triangle -->
+  <path d="M 107,15 L 107,29 L 121,29 Z" fill="#1e3040" opacity="0.55"/>
+  <!-- Content lines: cyan = unchanged, green = added, red = removed -->
+  <rect x="86" y="36" width="27" height="3"  rx="1.5" fill="#00bcd4" opacity="0.9"/>
+  <rect x="86" y="44" width="21" height="3"  rx="1.5" fill="#68d391" opacity="0.95"/><!-- added -->
+  <rect x="86" y="52" width="25" height="3"  rx="1.5" fill="#00bcd4" opacity="0.9"/>
+  <rect x="86" y="60" width="17" height="3"  rx="1.5" fill="#fc8181" opacity="0.80"/><!-- removed -->
+  <rect x="86" y="68" width="23" height="3"  rx="1.5" fill="#00bcd4" opacity="0.9"/>
+
+  <!-- ── XML label ── -->
+  <text x="64" y="99"
+        text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="15" font-weight="bold"
+        filter="url(#glow)">
+    <tspan fill="#2e5a6e">&lt;</tspan><tspan fill="#00bcd4">XML</tspan><tspan fill="#2e5a6e">&gt;</tspan>
+  </text>
+
+  <!-- ── diff label ── -->
+  <text x="64" y="117"
+        text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="10" font-weight="bold">
+    <tspan fill="#2e5a6e">&lt;</tspan><tspan fill="#68d391">diff</tspan><tspan fill="#2e5a6e">&gt;</tspan><tspan fill="#3a5268">...</tspan><tspan fill="#2e5a6e">&lt;/</tspan><tspan fill="#68d391">diff</tspan><tspan fill="#2e5a6e">&gt;</tspan>
+  </text>
+</svg>

@@ -16,6 +16,7 @@
   "engines": {
     "vscode": "^1.85.0"
   },
+  "icon": "icons/XMLDiffAndPatch-icon.png",
   "categories": [
     "Other"
   ],
