@@ -6,22 +6,22 @@ Originally developed for modding [b]X4: Foundations[/b] (which uses RFC 5261 XML
 
 [size=130][u]Features[/u][/size]
 [list]
-[*] [b]Auto-diff on save[/b] — Save a modified XML file and a diff is generated against the original (vanilla) version automatically.
-[*] [b]Auto-patch on save[/b] — Save a diff file and it is applied to the original to regenerate the modified file.
-[*] [b]Multiple folder pairs[/b] — Configure any number of [b]modifiedFolder[/b]/[b]diffFolder[/b] pairs under a single [b]originalFolder[/b], each with an optional [b]pathPrefix[/b].
-[*] [b]Glob pattern support[/b] — All folder paths accept [b]*[/b], [b]?[/b], and [b]**[/b] glob wildcards so a single config entry can cover multiple mod directories.
-[*] [b]Explorer context menu[/b] — Right-click XML files or folders for [i]Reset to Original[/i], [i]Reconstruct from Diff[/i], and [i]Regenerate Diff[/i] commands.
-[*] [b]Watch modes[/b] — [b]onSave[/b], [b]onTheFly[/b] (debounced filesystem watcher), or [b]contextMenuOnly[/b].
-[*] [b]Settings sidebar[/b] — A dedicated explorer panel lets you add, edit, and remove folder pairs per scope (User / Workspace / Folder) without editing JSON directly.
-[*] [b]XSD validation[/b] — Optionally validate generated diff files against a schema, with configurable fail behavior.
-[*] [b]Empty diff handling[/b] — Choose to write, delete, warn, or warn-and-delete when a save produces no diff operations.
-[*] [b]Orphan cleanup[/b] — Regenerating a diff folder removes diff files that no longer have a corresponding modified file.
+[*] [b]Auto-diff on save[/b]: Save a modified XML file and a diff is generated against the original (vanilla) version automatically.
+[*] [b]Auto-patch on save[/b]: Save a diff file and it is applied to the original to regenerate the modified file.
+[*] [b]Multiple folder pairs[/b]: Configure any number of [b]modifiedFolder[/b]/[b]diffFolder[/b] pairs under a single [b]originalFolder[/b], each with an optional [b]pathPrefix[/b].
+[*] [b]Glob pattern support[/b]: All folder paths accept [b]*[/b], [b]?[/b], and [b]**[/b] glob wildcards so a single config entry can cover multiple mod directories.
+[*] [b]Explorer context menu[/b]: Right-click XML files or folders for [i]Reset to Original[/i], [i]Reconstruct from Diff[/i], and [i]Regenerate Diff[/i] commands.
+[*] [b]Watch modes[/b]: [b]onSave[/b], [b]onTheFly[/b] (debounced filesystem watcher), or [b]contextMenuOnly[/b].
+[*] [b]Settings sidebar[/b]: A dedicated explorer panel lets you add, edit, and remove folder pairs per scope (User / Workspace / Folder) without editing JSON directly.
+[*] [b]XSD validation[/b]: Optionally validate generated diff files against a schema, with configurable fail behavior.
+[*] [b]Empty diff handling[/b]: Choose to write, delete, warn, or warn-and-delete when a save produces no diff operations.
+[*] [b]Orphan cleanup[/b]: Regenerating a diff folder removes diff files that no longer have a corresponding modified file.
 [/list]
 [size=130][u]Requirements[/u][/size]
 
 Set [b]xmlDiffAndPatch.originalFolder[/b] to the path containing the baseline XML files, then add at least one entry to [b]xmlDiffAndPatch.folderPairs[/b].
 
-[b]Minimal workspace settings example:[/b]
+[size=125][u]Minimal workspace settings example[/u][/size]
 
 [code=json]
 {
@@ -36,11 +36,11 @@ Set [b]xmlDiffAndPatch.originalFolder[/b] to the path containing the baseline XM
 }
 [/code]
 [list]
-[*] [b]originalFolder[/b] — Path to the vanilla/baseline XML files. Always required.
-[*] [b]folderPairs[/b] — Array of pairs to process. Each pair needs [b]modifiedFolder[/b] and [b]diffFolder[/b]; [b]pathPrefix[/b] is optional (see below).
+[*] [b]originalFolder[/b]: Path to the vanilla/baseline XML files. Always required.
+[*] [b]folderPairs[/b]: Array of pairs to process. Each pair needs [b]modifiedFolder[/b] and [b]diffFolder[/b]; [b]pathPrefix[/b] is optional (see below).
 [*] Use [b]"."[/b] to refer to the workspace folder itself.
 [*] [b]modifiedFolder[/b] and [b]diffFolder[/b] must not point to the same directory.
-[*] [b]originalFolder[/b], [b]modifiedFolder[/b], and [b]diffFolder[/b] support glob patterns ([b]*[/b], [b]?[/b], [b][b][/b]). [b]pathPrefix[/b] does [/b]not** support globs — it must be a plain file-system path segment.
+[*] [b]originalFolder[/b], [b]modifiedFolder[/b], and [b]diffFolder[/b] support glob patterns ([b]*[/b], [b]?[/b], [b][b][/b]). [b]pathPrefix[/b] does [/b]not** support globs: it must be a plain file-system path segment.
 [/list]
 [size=125][u]How folder pairs work[/u][/size]
 
@@ -63,25 +63,29 @@ Each pair in [b]folderPairs[/b] defines one diff/patch cycle:
 [*] Description: Optional sub-path [b]inserted between [b]originalFolder[/b] and the file's relative path[/b] when locating the baseline file. Must be a plain OS path segment (e.g. [b]libraries[/b] or [b]assets\xml[/b]). Leave empty if your modified files sit directly under [b]originalFolder[/b].
 [/list]
 [/list]
-[b]Path resolution:[/b]
+[size=120][u]Path resolution[/u][/size]
 
 When a [b]modified[/b] file is saved:
-[code]
+
+[code=text]
 original  → originalFolder / [pathPrefix /] <relPath>
 output    → diffFolder / <relPath>
 [/code]
 
 When a [b]diff[/b] file is saved ([b]reflectDiffToModified = true[/b]):
-[code]
+
+[code=text]
 original  → originalFolder / [pathPrefix /] <relPath>
 output    → modifiedFolder / <relPath>
 [/code]
 
-[b]relPath[/b] is always the file's path relative to the source watch folder ([b]modifiedFolder[/b] or [b]diffFolder[/b]). [b]pathPrefix[/b] only affects where the baseline file is looked up — it does not alter the output path.
+[b]relPath[/b] is always the file's path relative to the source watch folder ([b]modifiedFolder[/b] or [b]diffFolder[/b]). [b]pathPrefix[/b] only affects where the baseline file is looked up: it does not alter the output path.
 
 For example, if [b]originalFolder[/b] is [b]C:\X4\data[/b], [b]pathPrefix[/b] is [b]libraries[/b], and you save [b]{modifiedFolder}\ships\ship_xl.xml[/b] (relPath = [b]ships\ship_xl.xml[/b]), the extension looks up [b]C:\X4\data\libraries\ships\ship_xl.xml[/b] as the baseline and writes the diff to [b]{diffFolder}\ships\ship_xl.xml[/b].
 
-[b]Glob zipping:[/b] A glob in either field [i]multiplies[/i] the pair — each expanded directory becomes a separate watcher instance. Both lists are sorted alphabetically after expansion and then zipped index-by-index, so they must expand to the same count. If they differ, the extension cannot determine the correct correspondence and skips the whole pair with a warning.
+[size=120][u]Glob zipping[/u][/size]
+
+A glob in either field [i]multiplies[/i] the pair: each expanded directory becomes a separate watcher instance. Both lists are sorted alphabetically after expansion and then zipped index-by-index, so they must expand to the same count. If they differ, the extension cannot determine the correct correspondence and skips the whole pair with a warning.
 
 The typical pattern is a parallel directory structure where the same wildcard produces matching results in both fields:
 
@@ -128,13 +132,13 @@ All settings are under the [b]xmlDiffAndPatch[/b] namespace.
 
 [b]folderPairs[/b] is an array of objects, which VS Code's built-in settings UI does not support editing directly. There are two ways to manage them:
 
-[b]Option 1 — Settings Sidebar Panel (recommended)[/b]
+[size=120][u]Option 1: Settings Sidebar Panel (recommended)[/u][/size]
 
 Open the [i]XML Diff and Patch[/i] panel in the Explorer sidebar. It shows your folder pairs grouped by scope (User, Workspace, or per Folder). Use the [b]Add pair[/b] button to create a new entry, fill in the fields, and click [b]Save[/b]. Existing pairs can be edited in-place or removed with the [b]✕[/b] button.
 
 [spoiler][img]https://raw.githubusercontent.com/chemodun/XMLDiffAndPatch/refs/heads/main/docs/images/sidebar_panel.png[/img][/spoiler]
 
-[b]Option 2 — Edit [b]settings.json[/b] directly[/b]
+[size=120][u]Option 2: Edit [b]settings.json[/b] directly[/u][/size]
 
 Open the relevant [b]settings.json[/b] (e.g. [i]Preferences: Open Workspace Settings (JSON)[/i]) and add or edit the [b]xmlDiffAndPatch.folderPairs[/b] array manually:
 
@@ -162,7 +166,7 @@ Open the relevant [b]settings.json[/b] (e.g. [i]Preferences: Open Workspace Sett
 [*] Setting: [b]watchMode[/b]
 [list]
 [*] Default: [b]"onSave"[/b]
-[*] Description: [b]onSave[/b] — trigger on explicit save; [b]onTheFly[/b] — trigger on any FS change (debounced); [b]contextMenuOnly[/b] — disable auto-watching.
+[*] Description: [b]onSave[/b]: trigger on explicit save; [b]onTheFly[/b]: trigger on any FS change (debounced); [b]contextMenuOnly[/b]: disable auto-watching.
 [/list]
 [*] Setting: [b]debounceMs[/b]
 [list]
@@ -233,13 +237,13 @@ All extension activity is logged to the [b]XML Diff and Patch[/b] output channel
 
 [size=125][u]Enable debug logging[/u][/size]
 
-Set [b]xmlDiffAndPatch.debug[/b] to [b]true[/b] in your settings to enable verbose logging. Debug output includes the resolved paths for every file event, XPath generation steps, and raw diff operations — useful for diagnosing unexpected diffs or missing output files.
+Set [b]xmlDiffAndPatch.debug[/b] to [b]true[/b] in your settings to enable verbose logging. Debug output includes the resolved paths for every file event, XPath generation steps, and raw diff operations: useful for diagnosing unexpected diffs or missing output files.
 
 [code=json]
 "xmlDiffAndPatch.debug": true
 [/code]
 
-Remember to set it back to [b]false[/b] (or remove it) once you are done — debug mode is noisy.
+Remember to set it back to [b]false[/b] (or remove it) once you are done: debug mode is noisy.
 
 [size=125][u]Common issues[/u][/size]
 
@@ -281,7 +285,7 @@ X4: Foundations uses RFC 5261 XML patches to allow mods to modify game data with
 [list=1]
 [*] Set [b]originalFolder[/b] to the extracted X4 game-data folder.
 [*] Add a folder pair pointing at your mod's source XML and the diff output directory.
-[*] Edit and save your modified XML — the extension writes the RFC 5261 patch automatically.
+[*] Edit and save your modified XML: the extension writes the RFC 5261 patch automatically.
 [*] Include the diff files in your mod package.
 [/list]
 [size=130][u]Demo[/u][/size]
