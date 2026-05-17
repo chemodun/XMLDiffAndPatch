@@ -1,0 +1,308 @@
+[h1]XML Diff and Patch[/h1]
+
+A VS Code extension that automatically generates and applies [b]RFC 5261-compatible[/b] XML patch files using XPath selectors, watching modified XML files and producing diffs on save.
+
+Originally developed for modding [b]X4: Foundations[/b] (which uses RFC 5261 XML patches for game-data mods), the extension is fully generic and works with any XML workflow that follows the RFC 5261 patch format.
+
+[h2][b]Features[/b][/h2]
+[list]
+[*] [b]Auto-diff on save[/b] — Save a modified XML file and a diff is generated against the original (vanilla) version automatically.
+[*] [b]Auto-patch on save[/b] — Save a diff file and it is applied to the original to regenerate the modified file.
+[*] [b]Multiple folder pairs[/b] — Configure any number of [b]modifiedFolder[/b]/[b]diffFolder[/b] pairs under a single [b]originalFolder[/b], each with an optional [b]pathPrefix[/b].
+[*] [b]Glob pattern support[/b] — All folder paths accept [b]*[/b], [b]?[/b], and [b]**[/b] glob wildcards so a single config entry can cover multiple mod directories.
+[*] [b]Explorer context menu[/b] — Right-click XML files or folders for [i]Reset to Original[/i], [i]Reconstruct from Diff[/i], and [i]Regenerate Diff[/i] commands.
+[*] [b]Watch modes[/b] — [b]onSave[/b], [b]onTheFly[/b] (debounced filesystem watcher), or [b]contextMenuOnly[/b].
+[*] [b]Settings sidebar[/b] — A dedicated explorer panel lets you add, edit, and remove folder pairs per scope (User / Workspace / Folder) without editing JSON directly.
+[*] [b]XSD validation[/b] — Optionally validate generated diff files against a schema, with configurable fail behavior.
+[*] [b]Empty diff handling[/b] — Choose to write, delete, warn, or warn-and-delete when a save produces no diff operations.
+[*] [b]Orphan cleanup[/b] — Regenerating a diff folder removes diff files that no longer have a corresponding modified file.
+[/list]
+[h2][b]Requirements[/b][/h2]
+
+Set [b]xmlDiffAndPatch.originalFolder[/b] to the path containing the baseline XML files, then add at least one entry to [b]xmlDiffAndPatch.folderPairs[/b].
+
+[b]Minimal workspace settings example:[/b]
+
+[code]
+{
+  "xmlDiffAndPatch.originalFolder": "C:/Games/X4 Foundations/data",
+  "xmlDiffAndPatch.folderPairs": [
+    {
+      "modifiedFolder": "${workspaceFolder}/src",
+      "diffFolder": "${workspaceFolder}/diff",
+      "pathPrefix": "libraries"
+    }
+  ]
+}
+[/code]
+[list]
+[*] [b]originalFolder[/b] — Path to the vanilla/baseline XML files. Always required.
+[*] [b]folderPairs[/b] — Array of pairs to process. Each pair needs [b]modifiedFolder[/b] and [b]diffFolder[/b]; [b]pathPrefix[/b] is optional (see below).
+[*] Use [b]"."[/b] to refer to the workspace folder itself.
+[*] [b]modifiedFolder[/b] and [b]diffFolder[/b] must not point to the same directory.
+[*] [b]originalFolder[/b], [b]modifiedFolder[/b], and [b]diffFolder[/b] support glob patterns ([b]*[/b], [b]?[/b], [b][b][/b]). [b]pathPrefix[/b] does [/b]not** support globs — it must be a plain file-system path segment.
+[/list]
+[h2]How folder pairs work[/h2]
+
+Each pair in [b]folderPairs[/b] defines one diff/patch cycle:
+
+[list]
+[*] Field: [b]modifiedFolder[/b]
+[list]
+[*] Glob: ✅
+[*] Description: Folder containing your modified XML files.
+[/list]
+[*] Field: [b]diffFolder[/b]
+[list]
+[*] Glob: ✅
+[*] Description: Folder where generated diff files are written (or read from for patching).
+[/list]
+[*] Field: [b]pathPrefix[/b]
+[list]
+[*] Glob: ❌
+[*] Description: Optional sub-path [b]inserted between [b]originalFolder[/b] and the file's relative path[/b] when locating the baseline file. Must be a plain OS path segment (e.g. [b]libraries[/b] or [b]assets\xml[/b]). Leave empty if your modified files sit directly under [b]originalFolder[/b].
+[/list]
+[/list]
+[b]Path resolution:[/b]
+
+When a [b]modified[/b] file is saved:
+[code]
+original  → originalFolder / [pathPrefix /] <relPath>
+output    → diffFolder / <relPath>
+[/code]
+
+When a [b]diff[/b] file is saved ([b]reflectDiffToModified = true[/b]):
+[code]
+original  → originalFolder / [pathPrefix /] <relPath>
+output    → modifiedFolder / <relPath>
+[/code]
+
+[b]relPath[/b] is always the file's path relative to the source watch folder ([b]modifiedFolder[/b] or [b]diffFolder[/b]). [b]pathPrefix[/b] only affects where the baseline file is looked up — it does not alter the output path.
+
+For example, if [b]originalFolder[/b] is [b]C:\X4\data[/b], [b]pathPrefix[/b] is [b]libraries[/b], and you save [b]{modifiedFolder}\ships\ship_xl.xml[/b] (relPath = [b]ships\ship_xl.xml[/b]), the extension looks up [b]C:\X4\data\libraries\ships\ship_xl.xml[/b] as the baseline and writes the diff to [b]{diffFolder}\ships\ship_xl.xml[/b].
+
+[b]Glob zipping:[/b] A glob in either field [i]multiplies[/i] the pair — each expanded directory becomes a separate watcher instance. Both lists are sorted alphabetically after expansion and then zipped index-by-index, so they must expand to the same count. If they differ, the extension cannot determine the correct correspondence and skips the whole pair with a warning.
+
+The typical pattern is a parallel directory structure where the same wildcard produces matching results in both fields:
+
+[code]
+{ "modifiedFolder": "mods/*/src", "diffFolder": "mods/*/diff" }
+[/code]
+
+[b]mods/*/src[/b] → [b][mods/modA/src, mods/modB/src][/b]
+[b]mods/*/diff[/b] → [b][mods/modA/diff, mods/modB/diff][/b]
+Result: [b]modA/src ↔ modA/diff[/b], [b]modB/src ↔ modB/diff[/b]
+
+Multiple pairs share the same [b]originalFolder[/b] (and all other scalar settings). This lets you handle several mod directories in one workspace configuration.
+
+[h2][b]Context Menu Commands[/b][/h2]
+
+Right-click any XML file or folder in the Explorer to access the [b]XML Diff and Patch[/b] submenu. All three commands are also available from the Command Palette (uses the active editor's file when no selection is made). Selecting a folder processes all XML files within it recursively.
+
+[list]
+[*] Command: [b]Reset to Original[/b]
+[list]
+[*] Select from: [b]modifiedFolder[/b]
+[*] What it does: Copies the baseline file ([b]originalFolder/[pathPrefix/]relPath[/b]) over the modified file, discarding local changes.
+[/list]
+[*] Command: [b]Reconstruct from Diff[/b]
+[list]
+[*] Select from: [b]modifiedFolder[/b]
+[*] What it does: Applies the existing diff file ([b]diffFolder/relPath[/b]) to the baseline and writes the result back to [b]modifiedFolder/relPath[/b]. Useful to re-sync the modified file after manually editing a diff.
+[/list]
+[*] Command: [b]Regenerate Diff[/b]
+[list]
+[*] Select from: either folder
+[*] What it does: Re-diffs [b]modifiedFolder/relPath[/b] against the baseline and writes the result to [b]diffFolder/relPath[/b]. When invoked on a [b]folder[/b] selected from [b]modifiedFolder[/b], also removes orphan diff files (diffs that have no corresponding modified file).
+[/list]
+[/list]
+[img]https://raw.githubusercontent.com/chemodun/XMLDiffAndPatch/refs/heads/main/docs/images/context_menu.png[/img]
+
+After each run a notification reports how many files were processed, how many were skipped (no matching original or wrong folder role), and how many orphan diffs were deleted.
+
+[h2][b]Extension Settings[/b][/h2]
+
+All settings are under the [b]xmlDiffAndPatch[/b] namespace.
+
+[h2]Editing Folder Pairs[/h2]
+
+[b]folderPairs[/b] is an array of objects, which VS Code's built-in settings UI does not support editing directly. There are two ways to manage them:
+
+[b]Option 1 — Settings Sidebar Panel (recommended)[/b]
+
+Open the [i]XML Diff and Patch[/i] panel in the Explorer sidebar. It shows your folder pairs grouped by scope (User, Workspace, or per Folder). Use the [b]Add pair[/b] button to create a new entry, fill in the fields, and click [b]Save[/b]. Existing pairs can be edited in-place or removed with the [b]✕[/b] button.
+
+[img]https://raw.githubusercontent.com/chemodun/XMLDiffAndPatch/refs/heads/main/docs/images/sidebar_panel.png[/img]
+
+[b]Option 2 — Edit [b]settings.json[/b] directly[/b]
+
+Open the relevant [b]settings.json[/b] (e.g. [i]Preferences: Open Workspace Settings (JSON)[/i]) and add or edit the [b]xmlDiffAndPatch.folderPairs[/b] array manually:
+
+[code]
+"xmlDiffAndPatch.folderPairs": [
+  {
+    "modifiedFolder": "path/to/modified",
+    "diffFolder": "path/to/diff",
+    "pathPrefix": "optional/sub/path"
+  }
+]
+[/code]
+
+[list]
+[*] Setting: [b]originalFolder[/b]
+[list]
+[*] Default: [b]""[/b]
+[*] Description: Path to the vanilla/baseline XML folder. Required.
+[/list]
+[*] Setting: [b]folderPairs[/b]
+[list]
+[*] Default: [b][][/b]
+[*] Description: Array of [b]{ modifiedFolder, diffFolder, pathPrefix? }[/b] objects.
+[/list]
+[*] Setting: [b]watchMode[/b]
+[list]
+[*] Default: [b]"onSave"[/b]
+[*] Description: [b]onSave[/b] — trigger on explicit save; [b]onTheFly[/b] — trigger on any FS change (debounced); [b]contextMenuOnly[/b] — disable auto-watching.
+[/list]
+[*] Setting: [b]debounceMs[/b]
+[list]
+[*] Default: [b]500[/b]
+[*] Description: Debounce delay in ms for [b]onTheFly[/b] mode.
+[/list]
+[*] Setting: [b]reflectDiffToModified[/b]
+[list]
+[*] Default: [b]true[/b]
+[*] Description: When a diff file is saved, apply it to the original to regenerate the modified file.
+[/list]
+[*] Setting: [b]passOtherFiles[/b]
+[list]
+[*] Default: [b]true[/b]
+[*] Description: Copy files not found in [b]originalFolder[/b] as-is to the output folder.
+[/list]
+[*] Setting: [b]emptyDiffBehavior[/b]
+[list]
+[*] Default: [b]"delete"[/b]
+[*] Description: Action when diff produces no operations: [b]write[/b], [b]delete[/b], [b]warn[/b], or [b]warnDelete[/b].
+[/list]
+[*] Setting: [b]onlyFullPath[/b]
+[list]
+[*] Default: [b]false[/b]
+[*] Description: Always emit absolute XPath (no [b]//[/b] shorthand).
+[/list]
+[*] Setting: [b]useAllAttributes[/b]
+[list]
+[*] Default: [b]false[/b]
+[*] Description: Include all attributes in XPath predicates, not just disambiguating ones.
+[/list]
+[*] Setting: [b]ignoreDiffInAttribute[/b]
+[list]
+[*] Default: [b]null[/b]
+[*] Description: Attribute name to ignore when comparing elements (e.g. [b]"version"[/b]).
+[/list]
+[*] Setting: [b]xsdPath[/b]
+[list]
+[*] Default: [b]"./diff.xsd"[/b]
+[*] Description: Path to an XSD schema for validating generated diff files. Relative paths resolve from workspace root.
+[/list]
+[*] Setting: [b]validationFailBehavior[/b]
+[list]
+[*] Default: [b]"warn"[/b]
+[*] Description: On schema validation failure: [b]warn[/b] (write anyway), [b]error[/b] (skip write), or [b]off[/b] (disable validation).
+[/list]
+[*] Setting: [b]showDiffEditorOnSave[/b]
+[list]
+[*] Default: [b]false[/b]
+[*] Description: Open a side-by-side diff editor after generating a diff file.
+[/list]
+[*] Setting: [b]allowDoubles[/b]
+[list]
+[*] Default: [b]false[/b]
+[*] Description: Skip duplicate-element guard when applying [b]<add>[/b] operations during patch.
+[/list]
+[*] Setting: [b]debug[/b]
+[list]
+[*] Default: [b]false[/b]
+[*] Description: Enable verbose debug logging in the output channel.
+[/list]
+[/list]
+[h2][b]Troubleshooting[/b][/h2]
+
+[h2]Output channel[/h2]
+
+All extension activity is logged to the [b]XML Diff and Patch[/b] output channel. Open it via [i]View → Output[/i] and select [b]XML Diff and Patch[/b] from the dropdown. The channel shows which folder pairs were resolved, which files were processed, and any warnings or errors.
+
+[h2]Enable debug logging[/h2]
+
+Set [b]xmlDiffAndPatch.debug[/b] to [b]true[/b] in your settings to enable verbose logging. Debug output includes the resolved paths for every file event, XPath generation steps, and raw diff operations — useful for diagnosing unexpected diffs or missing output files.
+
+[code]
+"xmlDiffAndPatch.debug": true
+[/code]
+
+Remember to set it back to [b]false[/b] (or remove it) once you are done — debug mode is noisy.
+
+[h2]Common issues[/h2]
+
+[list]
+[*] Symptom: Nothing happens on save
+[list]
+[*] Likely cause: [b]watchMode[/b] is [b]contextMenuOnly[/b], or no valid folder pair matched the saved file
+[*] Fix: Check the Output channel for "not configured" or pair-skipped warnings; verify [b]originalFolder[/b] and [b]folderPairs[/b] are set.
+[/list]
+[*] Symptom: [i]"XML Diff+Patch: not configured"[/i] status bar warning
+[list]
+[*] Likely cause: [b]originalFolder[/b] is empty or [b]folderPairs[/b] is empty/invalid
+[*] Fix: Add at least one valid folder pair via the Settings sidebar or [b]settings.json[/b].
+[/list]
+[*] Symptom: Folder pair skipped with a warning
+[list]
+[*] Likely cause: Glob patterns in [b]modifiedFolder[/b] and [b]diffFolder[/b] expanded to a different number of directories
+[*] Fix: Ensure both globs match the same count of directories; check the Output channel for the expanded lists.
+[/list]
+[*] Symptom: File reported as skipped by a context menu command
+[list]
+[*] Likely cause: The selected file is not inside the required watch folder for that command (see [url=https://github.com/chemodun/XMLDiffAndPatch/raw/main/#context-menu-commands]Context Menu Commands[/url])
+[*] Fix: Select the file from the correct folder role ([b]modifiedFolder[/b] or [b]diffFolder[/b]).
+[/list]
+[*] Symptom: Baseline file not found
+[list]
+[*] Likely cause: [b]pathPrefix[/b] is wrong, or [b]originalFolder[/b] does not contain the expected sub-path
+[*] Fix: Enable debug logging and check the resolved [b]original →[/b] path printed in the Output channel.
+[/list]
+[*] Symptom: XSD validation errors
+[list]
+[*] Likely cause: Generated diff does not conform to the schema at [b]xsdPath[/b]
+[*] Fix: Review the diff file and the schema; set [b]validationFailBehavior[/b] to [b]"warn"[/b] to write the file anyway while investigating.
+[/list]
+[/list]
+[h2][b]X4: Foundations Usage[/b][/h2]
+
+X4: Foundations uses RFC 5261 XML patches to allow mods to modify game data without replacing entire files. This extension automates the diff/patch cycle:
+[list=1]
+[*] Set [b]originalFolder[/b] to the extracted X4 game-data folder.
+[*] Add a folder pair pointing at your mod's source XML and the diff output directory.
+[*] Edit and save your modified XML — the extension writes the RFC 5261 patch automatically.
+[*] Include the diff files in your mod package.
+[/list]
+[h2][b]Demo[/b][/h2]
+
+[img]https://raw.githubusercontent.com/chemodun/XMLDiffAndPatch/refs/heads/main/docs/images/small_demo.gif[/img]
+
+[h2][b]License[/b][/h2]
+
+This project is licensed under the Apache License 2.0 - see the [url=https://github.com/chemodun/XMLDiffAndPatch/raw/main/LICENSE]LICENSE[/url] file for details.
+
+[h2][b]Credits[/b][/h2]
+[list]
+[*] [url=https://www.egosoft.com]Egosoft[/url] - for the game itself (In fact - for the series of games)!
+[*] Members of the [url=https://discord.com/channels/337098290917146624/502057640877228042]x4_modding discord channel[/url] - for their answers, support, ideas, and inspiration!
+[/list]
+[h2][b]Changelog[/b][/h2]
+
+[h2][0.5.0] - 2026-05-17[/h2]
+[list]
+[*] Added
+[list]
+[*] Initial public version
+[/list]
+[/list]
