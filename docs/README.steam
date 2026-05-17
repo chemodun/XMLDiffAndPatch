@@ -290,7 +290,10 @@ X4: Foundations uses RFC 5261 XML patches to allow mods to modify game data with
 [/list]
 [h2][b]Demo[/b][/h2]
 
-[img]https://raw.githubusercontent.com/chemodun/XMLDiffAndPatch/refs/heads/main/docs/images/small_demo.gif[/img]
+[img]https://raw.githubusercontent.com/chemodun/XMLDiffAndPatch/refs/heads/main/docs/images/short_demo.gif[/img]
+
+YouTube short demo video
+[previewyoutube=t2Q3lh5tmRc;full][/previewyoutube]
 
 [h2][b]License[/b][/h2]
 
