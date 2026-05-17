@@ -1,9 +1,10 @@
 /**
  * Explorer context-menu commands for XML Diff and Patch.
  *
- * Three commands are registered here; all accept the standard VS Code explorer
- * multi-selection arguments (uri, uri[]).  When invoked from the command
- * palette (no arguments) the active editor document is used.
+ * Three commands are registered here; all accept a single URI (file or folder).
+ * When invoked from the Command Palette (no arguments) the active editor
+ * document is used. Selecting a folder processes all XML files within it
+ * recursively.
  *
  *  xmldiffandpatch.resetToOriginal     — copies original file(s) over modified
  *  xmldiffandpatch.reconstructFromDiff — applies diff(s) to original → modified
@@ -173,16 +174,13 @@ export function registerExplorerCommands(
     context.subscriptions.push(
       vscode.commands.registerCommand(
         id,
-        async (uri?: vscode.Uri, selected?: vscode.Uri[]) => {
-          // Resolve URIs: multi-selection → single → active editor
-          const uris: vscode.Uri[] =
-            selected?.length
-              ? selected
-              : uri
-              ? [uri]
-              : vscode.window.activeTextEditor
-              ? [vscode.window.activeTextEditor.document.uri]
-              : [];
+        async (uri?: vscode.Uri) => {
+          // Resolve URI: single selection → active editor
+          const uris: vscode.Uri[] = uri
+            ? [uri]
+            : vscode.window.activeTextEditor
+            ? [vscode.window.activeTextEditor.document.uri]
+            : [];
 
           if (uris.length === 0) {
             vscode.window.showWarningMessage(
