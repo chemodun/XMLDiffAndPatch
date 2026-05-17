@@ -1,0 +1,71 @@
+name: Build and Publish Extension
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and_publish:
+    runs-on: ubuntu-latest
+    env:
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      VT_API_KEY: ${{ secrets.VT_API_KEY }}
+      RELEASE_PLEASE_TOKEN: ${{ secrets.MY_RELEASE_PLEASE_TOKEN }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v4.3.0
+        with:
+          node-version: '22'
+          check-latest: true
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build extension
+        run: npm run package
+
+      - name: Package extension
+        id: package
+        run: |
+          mkdir -p artifacts
+          npx --yes @vscode/vsce package --out ./artifacts
+          PACKAGE_PATH="$(find ./artifacts -maxdepth 1 -name '*.vsix' -print -quit)"
+          echo "package_path=${PACKAGE_PATH}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to Visual Studio Marketplace
+        if: ${{ github.event_name == 'release' && env.VSCE_PAT != '' }}
+        env:
+          VSCE_PAT: ${{ env.VSCE_PAT }}
+        run: npx --yes @vscode/vsce publish
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: ${{ steps.package.outputs.package_path }}
+
+      - name: Attach Extension .vsix to Release
+        if: ${{ github.event_name == 'release' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ env.RELEASE_PLEASE_TOKEN != '' && env.RELEASE_PLEASE_TOKEN || github.token }}
+          tag_name: ${{ github.event.release.tag_name }}
+          files: ${{ steps.package.outputs.package_path }}
+
+      - name: VirusTotal scan
+        if: ${{ github.event_name == 'release' && env.VT_API_KEY != '' }}
+        uses: crazy-max/ghaction-virustotal@v4
+        with:
+          update_release_body: true
+          request_rate: 4
+          vt_api_key: ${{ env.VT_API_KEY }}
+          github_token: ${{ env.RELEASE_PLEASE_TOKEN != '' && env.RELEASE_PLEASE_TOKEN || github.token }}
+          files: |
+            .vsix$
