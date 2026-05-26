@@ -201,6 +201,11 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 ## Changelog
 
+### [0.6.2] - 2026-05-27
+
+- Fixed
+  - A Changelog part in README.md
+
 ### [0.6.1] - 2026-05-26
 
 - Improved
