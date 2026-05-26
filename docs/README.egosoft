@@ -305,6 +305,13 @@ This project is licensed under the Apache License 2.0 - see the [url=https://git
 [/list]
 [size=130][u]Changelog[/u][/size]
 
+[size=125][u][0.6.2] - 2026-05-27[/u][/size]
+[list]
+[*] Fixed
+[list]
+[*] A Changelog part in README.md
+[/list]
+[/list]
 [size=125][u][0.6.1] - 2026-05-26[/u][/size]
 [list]
 [*] Improved
