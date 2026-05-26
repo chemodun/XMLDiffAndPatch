@@ -98,7 +98,7 @@ Right-click any XML file or folder in the Explorer to access the **XML Diff and 
 | **Reconstruct from Diff** | `modifiedFolder` | Applies the existing diff file (`diffFolder/relPath`) to the baseline and writes the result back to `modifiedFolder/relPath`. Useful to re-sync the modified file after manually editing a diff. |
 | **Regenerate Diff** | either folder | Re-diffs `modifiedFolder/relPath` against the baseline and writes the result to `diffFolder/relPath`. When invoked on a **folder** selected from `modifiedFolder`, also removes orphan diff files (diffs that have no corresponding modified file). |
 
-![Context Menu](docs/images/context_menu.png)
+![Context Menu](https://raw.githubusercontent.com/chemodun/XMLDiffAndPatch/refs/heads/main/docs/images/context_menu.png)
 
 After each run a notification reports how many files were processed, how many were skipped (no matching original or wrong folder role), and how many orphan diffs were deleted.
 
@@ -114,7 +114,7 @@ All settings are under the `xmlDiffAndPatch` namespace.
 
 Open the *XML Diff and Patch* panel in the Explorer sidebar. It shows your folder pairs grouped by scope (User, Workspace, or per Folder). Use the **Add pair** button to create a new entry, fill in the fields, and click **Save**. Existing pairs can be edited in-place or removed with the **✕** button.
 
-![Sidebar Panel](docs/images/sidebar_panel.png)
+![Sidebar Panel](https://raw.githubusercontent.com/chemodun/XMLDiffAndPatch/refs/heads/main/docs/images/sidebar_panel.png)
 
 #### Option 2: Edit `settings.json` directly
 
@@ -186,7 +186,7 @@ X4: Foundations uses RFC 5261 XML patches to allow mods to modify game data with
 
 ## Demo
 
-![Short Demo GIF](docs/images/short_demo.gif)
+![Short Demo GIF](https://raw.githubusercontent.com/chemodun/XMLDiffAndPatch/refs/heads/main/docs/images/short_demo.gif)
 
 [YouTube short demo video](https://www.youtube.com/watch?v=t2Q3lh5tmRc)
 
@@ -200,6 +200,11 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 - Members of the [x4_modding discord channel](https://discord.com/channels/337098290917146624/502057640877228042) - for their answers, support, ideas, and inspiration!
 
 ## Changelog
+
+### [0.5.1] - 2026-05-26
+
+- Improved
+  - XPath generation logic, including fallback to the full path.
 
 ### [0.5.0] - 2026-05-17
 
