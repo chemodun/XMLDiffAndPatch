@@ -5,3 +5,13 @@ node_modules/**
 out/**.js.map
 esbuild.js
 tsconfig.json
+docs/**
+test-workspace/**
+releases/**
+**.svg
+dist/**
+.github/**
+*.code-workspace
+.gitignore
+.release-please-manifest.json
+release-please-config.json
