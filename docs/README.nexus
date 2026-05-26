@@ -306,14 +306,14 @@ This project is licensed under the Apache License 2.0 - see the [url=https://git
 [/list]
 [size=3][u][b]Changelog[/b][/u][/size]
 
-[size=3][u][i][0.5.1] - 2026-05-26[/i][/u][/size]
+[size=3][u][i][0.6.1] - 2026-05-26[/i][/u][/size]
 [list]
 [*] Improved
 [list]
 [*] XPath generation logic, including fallback to the full path.
 [/list]
 [/list]
-[size=3][u][i][0.5.0] - 2026-05-17[/i][/u][/size]
+[size=3][u][i][0.6.0] - 2026-05-17[/i][/u][/size]
 [list]
 [*] Added
 [list]
