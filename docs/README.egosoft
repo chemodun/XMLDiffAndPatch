@@ -305,6 +305,13 @@ This project is licensed under the Apache License 2.0 - see the [url=https://git
 [/list]
 [size=130][u]Changelog[/u][/size]
 
+[size=125][u][0.5.1] - 2026-05-26[/u][/size]
+[list]
+[*] Improved
+[list]
+[*] XPath generation logic, including fallback to the full path.
+[/list]
+[/list]
 [size=125][u][0.5.0] - 2026-05-17[/u][/size]
 [list]
 [*] Added
