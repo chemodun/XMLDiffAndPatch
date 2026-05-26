@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.6.2](https://github.com/chemodun/XMLDiffAndPatch/compare/xmldiffandpatch@v0.6.1...xmldiffandpatch@v0.6.2) (2026-05-26)
+
+
+### Documentation
+
+* **bbcode:** Update bbcode files ([be0d863](https://github.com/chemodun/XMLDiffAndPatch/commit/be0d863d5983d41e780949c82c064635a92c1a53))
+* update changelog for version 0.6.1 and 0.6.0 ([16c9ac3](https://github.com/chemodun/XMLDiffAndPatch/commit/16c9ac33ab9a24c977d11b086ea1c091390c1e68))
+* update changelog for version 0.6.2 ([38ee51b](https://github.com/chemodun/XMLDiffAndPatch/commit/38ee51be6f9b37ea87808b205b3c275bd1b97346))
+
 ## [0.6.1](https://github.com/chemodun/XMLDiffAndPatch/compare/xmldiffandpatch-v0.6.0...xmldiffandpatch@v0.6.1) (2026-05-26)
 
 

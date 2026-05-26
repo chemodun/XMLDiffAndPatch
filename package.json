@@ -2,7 +2,7 @@
   "name": "xmldiffandpatch",
   "displayName": "XML Diff and Patch",
   "description": "Generates and applies RFC 5261-compatible XML patch files using XPath selectors. Watches modified XML files and automatically produces diffs on save.",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "publisher": "X4DevTools",
   "author": {
     "name": "Chem O'Dun",
