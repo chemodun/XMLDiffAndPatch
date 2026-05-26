@@ -5,10 +5,17 @@
  * toward the document root, building the minimal predicate that uniquely
  * identifies the element.
  */
-import * as xpath from 'xpath';
 import type { Element, Document, Attr } from '@xmldom/xmldom';
 import type { DiffOptions } from './types.js';
 import { ELEMENT_NODE } from './xmlUtils.js';
+
+// ─── Compiled regexes ─────────────────────────────────────────────────────────
+
+// Matches [@attr='val'] or [@attr="val"] predicates in an XPath step string.
+const ATTR_PREDICATE_RE = /\[@([\w:.-]+)='([^']*)'\]|\[@([\w:.-]+)="([^"]*)"\]/g;
+
+// Matches a numeric position predicate like [1], [2], [3] …
+const NUMERIC_INDEX_RE = /\[\d+\]/;
 
 // ─── Public entry point ───────────────────────────────────────────────────────
 
@@ -38,6 +45,14 @@ export function generateXPath(element: Element, options: DiffOptions): string {
     }
 
     const resolvedStep = step || getSiblingFallbackStep(current, parent, pathForParent, options);
+
+    // getSiblingFallbackStep may return a complete path starting with / or //
+    if (resolvedStep.startsWith('/')) {
+      steps.reverse();
+      const below = steps.length > 0 ? '/' + steps.join('/') : '';
+      return resolvedStep + below;
+    }
+
     steps.push(resolvedStep);
     current = parent;
   }
@@ -114,22 +129,25 @@ export function getElementPathStep(
 
 // ─── Global uniqueness check ──────────────────────────────────────────────────
 
+/**
+ * LINQ-style global search — namespace-aware via localName comparison.
+ * Port of C# XPathGenerator.TryGlobalUnique.
+ */
 function tryGlobalUnique(
   step: string,
   element: Element,
   doc: Document | null
 ): { step: string; pathForParent: string } {
   if (doc) {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const globalMatches = (xpath.select('//' + step, doc as any) as unknown[]).filter(
-        (n): n is Element => (n as Element).nodeType === ELEMENT_NODE
-      );
-      if (globalMatches.length === 1 && globalMatches[0] === element) {
-        return { step: '//' + step, pathForParent: step };
-      }
-    } catch {
-      // Invalid XPath — fall through
+    const { localName, attrs } = parseXPathStep(step);
+    let candidates = getAllDescendants(doc).filter(
+      (e) => (e.localName ?? e.nodeName) === localName
+    );
+    for (const { name, value } of attrs) {
+      candidates = candidates.filter((e) => hasAttribute(e, name, value));
+    }
+    if (candidates.length === 1 && candidates[0] === element) {
+      return { step: '//' + step, pathForParent: step };
     }
   }
   return { step, pathForParent: step };
@@ -154,11 +172,27 @@ export function getSiblingFallbackStep(
   const doc = !options.onlyFullPath ? (element.ownerDocument ?? null) : null;
   const elemLocalName = element.localName ?? element.nodeName;
 
+  // Pre-parse pathForParent for attribute-aware sibling counting (name + attributes).
+  const { localName: pfpLocalName, attrs: pfpAttrs } = parseXPathStep(pathForParent);
+  const matchesPfp = (e: Element): boolean =>
+    (e.localName ?? e.nodeName) === pfpLocalName &&
+    pfpAttrs.every(({ name, value }) => hasAttribute(e, name, value));
+
   // Try preceding sibling
   if (index > 0) {
     const prev = siblings[index - 1];
     const { step: prevStep } = getElementPathStep(prev, parent, doc, options);
     if (prevStep && !prevStep.startsWith('//')) {
+      // Count elements matching pathForParent (name + attributes) among following siblings.
+      const followingCount = siblings.slice(index).filter(matchesPfp).length;
+      if (followingCount === 1) {
+        return `${prevStep}/following-sibling::${pathForParent}`;
+      }
+      // Would need [1] — try full-path fallback first.
+      if (!options.onlyFullPath) {
+        const fullPath = tryFullPathFallback(element, options);
+        if (fullPath !== null) return fullPath;
+      }
       return `${prevStep}/following-sibling::${pathForParent}[1]`;
     }
   }
@@ -168,31 +202,118 @@ export function getSiblingFallbackStep(
     const next = siblings[index + 1];
     const { step: nextStep } = getElementPathStep(next, parent, doc, options);
     if (nextStep && !nextStep.startsWith('//')) {
+      const precedingCount = siblings.slice(0, index + 1).filter(matchesPfp).length;
+      if (precedingCount === 1) {
+        return `${nextStep}/preceding-sibling::${pathForParent}`;
+      }
+      if (!options.onlyFullPath) {
+        const fullPath = tryFullPathFallback(element, options);
+        if (fullPath !== null) return fullPath;
+      }
       return `${nextStep}/preceding-sibling::${pathForParent}[1]`;
     }
   }
 
   // Count same-named preceding siblings
-  const sameNamePreceding = siblings.slice(0, index).filter((s) => (s.localName ?? s.nodeName) === elemLocalName).length;
-  if (sameNamePreceding === 0 && siblings.filter((s) => (s.localName ?? s.nodeName) === elemLocalName).length === 1) {
+  const sameNamePreceding = siblings
+    .slice(0, index)
+    .filter((s) => (s.localName ?? s.nodeName) === elemLocalName).length;
+  if (
+    sameNamePreceding === 0 &&
+    siblings.filter((s) => (s.localName ?? s.nodeName) === elemLocalName).length === 1
+  ) {
     return pathForParent; // Only one element with this name
+  }
+
+  // Last resort: try full-path fallback first.
+  if (!options.onlyFullPath) {
+    const fullPath = tryFullPathFallback(element, options);
+    if (fullPath !== null) return fullPath;
   }
 
   return `${pathForParent}[${sameNamePreceding + 1}]`;
 }
 
+/**
+ * Attempts to generate an absolute XPath for `element` using full-path mode.
+ * Returns the path only if it contains no numeric position indices (i.e., avoids [x]);
+ * returns null if the full path itself still requires a positional index.
+ *
+ * Port of C# XPathGenerator.TryFullPathFallback.
+ */
+function tryFullPathFallback(element: Element, options: DiffOptions): string | null {
+  const fullPathOptions: DiffOptions = { ...options, onlyFullPath: true };
+  const result = generateXPath(element, fullPathOptions);
+  return NUMERIC_INDEX_RE.test(result) ? null : result;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function isUniqueInParent(xpathExpr: string, element: Element, parent: Element): boolean {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const matches = (xpath.select(xpathExpr, parent as any) as unknown[]).filter(
-      (n): n is Element => (n as Element).nodeType === ELEMENT_NODE
-    );
-    return matches.length === 1 && matches[0] === element;
-  } catch {
-    return false;
+/**
+ * Parses an XPath step of the form "localName[@a='v'][@b='v']..." into its parts.
+ * Attribute values with &quot; are unescaped back to '"'.
+ *
+ * Port of C# XPathGenerator.ParseXPathStep.
+ */
+function parseXPathStep(step: string): { localName: string; attrs: { name: string; value: string }[] } {
+  const bracketIdx = step.indexOf('[');
+  const localName = bracketIdx < 0 ? step : step.slice(0, bracketIdx);
+  const attrs: { name: string; value: string }[] = [];
+  for (const m of step.matchAll(ATTR_PREDICATE_RE)) {
+    const attrName = m[1] ?? m[3];
+    const attrValue = (m[2] ?? m[4]).replace(/&quot;/g, '"');
+    attrs.push({ name: attrName, value: attrValue });
   }
+  return { localName, attrs };
+}
+
+/**
+ * LINQ-style uniqueness check — namespace-aware via localName comparison.
+ * Works correctly for elements with namespace prefixes (e.g. xs:complexType).
+ *
+ * Port of C# XPathGenerator.IsUniqueInParent.
+ */
+function isUniqueInParent(step: string, element: Element, parent: Element): boolean {
+  const { localName, attrs } = parseXPathStep(step);
+  let candidates = getChildElements(parent).filter(
+    (e) => (e.localName ?? e.nodeName) === localName
+  );
+  for (const { name, value } of attrs) {
+    candidates = candidates.filter((e) => hasAttribute(e, name, value));
+  }
+  return candidates.length === 1 && candidates[0] === element;
+}
+
+/** Returns true if element has an attribute matching localName and value. */
+function hasAttribute(element: Element, localName: string, value: string): boolean {
+  if (!element.attributes) return false;
+  for (let i = 0; i < element.attributes.length; i++) {
+    const a = element.attributes[i];
+    if ((a.localName ?? a.name ?? '') === localName && a.value === value) return true;
+  }
+  return false;
+}
+
+/** Returns all descendant elements of a document (inclusive of root). */
+function getAllDescendants(doc: Document): Element[] {
+  const result: Element[] = [];
+  function traverse(node: Element): void {
+    let child = node.firstChild;
+    while (child) {
+      if (child.nodeType === ELEMENT_NODE) {
+        const el = child as Element;
+        result.push(el);
+        traverse(el);
+      }
+      child = child.nextSibling;
+    }
+  }
+  const root = doc.documentElement;
+  if (root) {
+    result.push(root);
+    traverse(root);
+  }
+  return result;
 }
 
 /**
@@ -202,14 +323,14 @@ function isUniqueInParent(xpathExpr: string, element: Element, parent: Element):
  * Port of C# XPathGenerator.AttributeToXpathElement.
  */
 export function attributeToXpathElement(attr: Attr): string {
-  const attrName = attr.name ?? attr.localName ?? '';
+  const attrName = attr.localName ?? attr.name ?? '';
   const value = attr.value.replace(/"/g, '&quot;');
   return value.includes("'")
     ? `[@${attrName}="${value}"]`
     : `[@${attrName}='${value}']`;
 }
 
-/** Returns direct child elements (helper shared with diffEngine). */
+/** Returns direct child elements. */
 function getChildElements(element: Element): Element[] {
   const result: Element[] = [];
   let child = element.firstChild;
