@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/chemodun/XMLDiffAndPatch/compare/xmldiffandpatch-v0.6.0...xmldiffandpatch@v0.6.1) (2026-05-26)
+
+
+### Code Refactoring
+
+* enhance XPath generation with attribute-aware parsing and fallback mechanisms ([272848d](https://github.com/chemodun/XMLDiffAndPatch/commit/272848db20065c8512c879ef779d3c8545908f51))
+
 ## [0.6.0](https://github.com/chemodun/XMLDiffAndPatch/compare/xmldiffandpatch-v0.5.0...xmldiffandpatch-v0.6.0) (2026-05-17)
 
 
