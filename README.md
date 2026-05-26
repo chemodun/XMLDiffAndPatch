@@ -201,12 +201,12 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 ## Changelog
 
-### [0.5.1] - 2026-05-26
+### [0.6.1] - 2026-05-26
 
 - Improved
   - XPath generation logic, including fallback to the full path.
 
-### [0.5.0] - 2026-05-17
+### [0.6.0] - 2026-05-17
 
 - Added
   - Initial public version
