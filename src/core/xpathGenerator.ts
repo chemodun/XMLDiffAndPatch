@@ -30,12 +30,13 @@ export function generateXPath(element: Element, options: DiffOptions): string {
   // We reverse at the end and join to get root→element order.
   const steps: string[] = [];
   let current: Element = element;
+  let nextOnPath: Element | null = null; // child of 'current' that lies on the path to the target
 
   while (current.parentNode && current.parentNode.nodeType === ELEMENT_NODE) {
     const parent = current.parentNode as Element;
     const doc = !options.onlyFullPath ? (current.ownerDocument ?? null) : null;
 
-    const { step, pathForParent } = getElementPathStep(current, parent, doc, options);
+    const { step, pathForParent } = getElementPathStep(current, parent, doc, options, nextOnPath);
 
     if (step.startsWith('//')) {
       // Globally unique — prepend and return.
@@ -53,6 +54,7 @@ export function generateXPath(element: Element, options: DiffOptions): string {
       return resolvedStep + below;
     }
 
+    nextOnPath = current; // for next iteration: current's parent knows current is on the path
     steps.push(resolvedStep);
     current = parent;
   }
@@ -75,7 +77,8 @@ export function getElementPathStep(
   element: Element,
   parent: Element,
   doc: Document | null,
-  options: DiffOptions
+  options: DiffOptions,
+  onPathChild: Element | null = null
 ): { step: string; pathForParent: string } {
   // Start with name only; add attributes only as needed for uniqueness.
   const localName = element.localName ?? element.nodeName;
@@ -83,11 +86,21 @@ export function getElementPathStep(
 
   // Check uniqueness with name only first
   if (isUniqueInParent(pathForParent, element, parent)) {
+    if (options.humanReadable) {
+      const fa = element.attributes?.[0];
+      if (fa) {
+        const humanStep = pathForParent + attributeToXpathElement(fa);
+        return tryGlobalUnique(humanStep, element, doc);
+      }
+    }
     return tryGlobalUnique(pathForParent, element, doc);
   }
 
   const firstAttr = element.attributes?.[0] ?? null;
   if (!firstAttr) {
+    // No own attributes — try qualifying by a direct child element predicate before giving up
+    const noAttrResult = tryChildPredicateStep(element, parent, pathForParent, doc, onPathChild);
+    if (noAttrResult !== null) return noAttrResult;
     return { step: '', pathForParent };
   }
 
@@ -124,6 +137,9 @@ export function getElementPathStep(
   }
 
   // Could not make unique within parent with any attribute combination
+  // Try child element predicate as last resort before falling through
+  const childResult = tryChildPredicateStep(element, parent, pathForParent, doc, onPathChild);
+  if (childResult !== null) return childResult;
   return { step: '', pathForParent };
 }
 
@@ -151,6 +167,122 @@ function tryGlobalUnique(
     }
   }
   return { step, pathForParent: step };
+}
+
+// ─── Child-predicate qualification ────────────────────────────────────────────────
+
+/**
+ * Tries to uniquely qualify `element` within `parent` using a direct child
+ * existence predicate: e.g. do_else[do_if[@value='X']].
+ * Returns the step tuple, or null if no child predicate achieves uniqueness.
+ *
+ * Port of C# XPathGenerator.TryChildPredicateStep.
+ */
+function tryChildPredicateStep(
+  element: Element,
+  parent: Element,
+  pathForParent: string,
+  doc: Document | null,
+  preferredChild: Element | null = null
+): { step: string; pathForParent: string } | null {
+  const localName = element.localName ?? element.nodeName;
+
+  // Phase 1: If the on-path child can uniquely qualify this element, return the plain name.
+  // The path continues through that child, which provides the discrimination by itself:
+  //   e.g. do_else/do_if[@value='x']/...  is preferred over  do_else[do_if[@value='x']]/do_if[@value='x']/...
+  if (preferredChild !== null && preferredChild.parentNode === element) {
+    let childPred = preferredChild.localName ?? preferredChild.nodeName;
+
+    if (isUniqueByChildPredicate(localName, childPred, element, parent)) {
+      return { step: localName, pathForParent };
+    }
+
+    if (preferredChild.attributes) {
+      for (let i = 0; i < preferredChild.attributes.length; i++) {
+        childPred += attributeToXpathElement(preferredChild.attributes[i]);
+        if (isUniqueByChildPredicate(localName, childPred, element, parent)) {
+          return { step: localName, pathForParent };
+        }
+      }
+    }
+  }
+
+  // Phase 2: Try non-on-path children as predicates — return elem[child_pred] form.
+  const otherChildren =
+    preferredChild !== null && preferredChild.parentNode === element
+      ? getChildElements(element).filter((c) => c !== preferredChild)
+      : getChildElements(element);
+
+  for (const child of otherChildren) {
+    const childLocalName = child.localName ?? child.nodeName;
+    let childPred = childLocalName;
+
+    // Try name-only child predicate first
+    if (isUniqueByChildPredicate(localName, childPred, element, parent)) {
+      const fullStep = `${localName}[${childPred}]`;
+      return tryGlobalUniqueChildPredicate(fullStep, localName, childPred, element, doc, pathForParent);
+    }
+
+    // Add child attributes one by one
+    if (child.attributes) {
+      for (let i = 0; i < child.attributes.length; i++) {
+        childPred += attributeToXpathElement(child.attributes[i]);
+        if (isUniqueByChildPredicate(localName, childPred, element, parent)) {
+          const fullStep = `${localName}[${childPred}]`;
+          return tryGlobalUniqueChildPredicate(fullStep, localName, childPred, element, doc, pathForParent);
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+function isUniqueByChildPredicate(
+  elemLocalName: string,
+  childPred: string,
+  element: Element,
+  parent: Element
+): boolean {
+  const { localName: childLocalName, attrs: childAttrs } = parseXPathStep(childPred);
+  const childMatches = (e: Element): boolean =>
+    getChildElements(e).some(
+      (c) =>
+        (c.localName ?? c.nodeName) === childLocalName &&
+        childAttrs.every(({ name, value }) => hasAttribute(c, name, value))
+    );
+
+  const candidates = getChildElements(parent).filter(
+    (e) => (e.localName ?? e.nodeName) === elemLocalName && childMatches(e)
+  );
+  return candidates.length === 1 && candidates[0] === element;
+}
+
+function tryGlobalUniqueChildPredicate(
+  fullStep: string,
+  elemLocalName: string,
+  childPred: string,
+  element: Element,
+  doc: Document | null,
+  pathForParent: string
+): { step: string; pathForParent: string } {
+  if (doc) {
+    const { localName: childLocalName, attrs: childAttrs } = parseXPathStep(childPred);
+    const childMatches = (e: Element): boolean =>
+      getChildElements(e).some(
+        (c) =>
+          (c.localName ?? c.nodeName) === childLocalName &&
+          childAttrs.every(({ name, value }) => hasAttribute(c, name, value))
+      );
+
+    const candidates = getAllDescendants(doc).filter(
+      (e) => (e.localName ?? e.nodeName) === elemLocalName && childMatches(e)
+    );
+    if (candidates.length === 1 && candidates[0] === element) {
+      return { step: '//' + fullStep, pathForParent };
+    }
+  }
+  return { step: fullStep, pathForParent };
 }
 
 // ─── Sibling fallback ─────────────────────────────────────────────────────────
@@ -182,7 +314,7 @@ export function getSiblingFallbackStep(
   if (index > 0) {
     const prev = siblings[index - 1];
     const { step: prevStep } = getElementPathStep(prev, parent, doc, options);
-    if (prevStep && !prevStep.startsWith('//')) {
+    if (prevStep) {
       // Count elements matching pathForParent (name + attributes) among following siblings.
       const followingCount = siblings.slice(index).filter(matchesPfp).length;
       if (followingCount === 1) {
@@ -201,7 +333,7 @@ export function getSiblingFallbackStep(
   if (index + 1 < siblings.length) {
     const next = siblings[index + 1];
     const { step: nextStep } = getElementPathStep(next, parent, doc, options);
-    if (nextStep && !nextStep.startsWith('//')) {
+    if (nextStep) {
       const precedingCount = siblings.slice(0, index + 1).filter(matchesPfp).length;
       if (precedingCount === 1) {
         return `${nextStep}/preceding-sibling::${pathForParent}`;
