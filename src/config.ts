@@ -248,9 +248,14 @@ async function readGlobalConfig(outputChannel: vscode.OutputChannel): Promise<Wa
  *
  *  - `originalFolder`: glob is expanded; the **first** alphabetical match is
  *    used (a warning is logged when multiple directories match).
- *  - `modifiedFolder` + `diffFolder`: each is expanded independently; the two
- *    result lists must have the same length — they are then **zipped** into
- *    individual WatcherConfig entries.
+ *  - `modifiedFolder` + `diffFolder`: each is expanded independently.  The two
+ *    result lists are matched by a **capture key** — the portion of each
+ *    expanded path matched by the wildcards (static prefix and literal suffix
+ *    are stripped before comparison).  Only mod/diff entries whose capture keys
+ *    match are activated; unmatched entries produce a per-entry warning and are
+ *    skipped.  This allows asymmetric expansions such as
+ *    `**\/aiscripts.modified` (4 dirs) paired with `**\/aiscripts` (2 dirs):
+ *    only the 2 dirs whose parent matches on both sides are used.
  */
 async function buildConfigsFromPairs(
   root: string,
@@ -319,23 +324,114 @@ async function buildConfigsFromPairs(
       );
       continue;
     }
-    if (expandedMod.length !== expandedDiff.length) {
-      outputChannel.appendLine(
-        `[WARN]  [${pairLabel}] modifiedFolder glob matched ${expandedMod.length} ` +
-        `director${expandedMod.length === 1 ? 'y' : 'ies'} but diffFolder glob matched ` +
-        `${expandedDiff.length} — counts must match for zipping. Skipping pair.`
-      );
-      continue;
+
+    // ── Match mod ↔ diff entries ──────────────────────────────────────────────
+    // When neither side uses globs, pair the two exact paths directly.
+    // When at least one side uses a glob, derive a "capture key" from the
+    // wildcard-matched portion of each path (static prefix and literal suffix
+    // are stripped) and match by that key.  This handles asymmetric expansions:
+    // e.g. modifiedFolder `**\aiscripts.modified` may resolve to more dirs than
+    // diffFolder `**\aiscripts`; only dirs that share the same capture key are
+    // paired, and the rest are skipped with a warning.
+    const matchedPairs: Array<[string, string]> = [];
+
+    if (!hasGlobChars(rawMod) && !hasGlobChars(rawDiff)) {
+      // Simple case: both are exact (non-glob) paths → always one pair.
+      if (shared.debug) {
+        outputChannel.appendLine(`[DEBUG] [${pairLabel}] No globs — exact pair: mod='${expandedMod[0]}' diff='${expandedDiff[0]}'`);
+      }
+      matchedPairs.push([expandedMod[0], expandedDiff[0]]);
+    } else {
+      const modBase        = globStaticBase(rawMod);
+      const diffBase       = globStaticBase(rawDiff);
+      const modSuffixCount  = globLiteralSuffixCount(rawMod);
+      const diffSuffixCount = globLiteralSuffixCount(rawDiff);
+
+      if (shared.debug) {
+        outputChannel.appendLine(
+          `[DEBUG] [${pairLabel}] Glob key matching — ` +
+          `mod: base='${modBase}' suffixCount=${modSuffixCount} expanded=${expandedMod.length} dir(s); ` +
+          `diff: base='${diffBase}' suffixCount=${diffSuffixCount} expanded=${expandedDiff.length} dir(s)`
+        );
+      }
+
+      const modMap  = new Map<string, string>();
+      for (const p of expandedMod) {
+        const key = globCaptureKey(modBase, p, modSuffixCount);
+        if (shared.debug) {
+          outputChannel.appendLine(`[DEBUG] [${pairLabel}] mod  capture key='${key}'  path='${p}'`);
+        }
+        if (modMap.has(key)) {
+          outputChannel.appendLine(
+            `[WARN]  [${pairLabel}] modifiedFolder: duplicate capture key '${key}' ` +
+            `for '${p}' (already mapped '${modMap.get(key)}'). Using last match.`
+          );
+        }
+        modMap.set(key, p);
+      }
+
+      const diffMap = new Map<string, string>();
+      for (const p of expandedDiff) {
+        const key = globCaptureKey(diffBase, p, diffSuffixCount);
+        if (shared.debug) {
+          outputChannel.appendLine(`[DEBUG] [${pairLabel}] diff capture key='${key}'  path='${p}'`);
+        }
+        if (diffMap.has(key)) {
+          outputChannel.appendLine(
+            `[WARN]  [${pairLabel}] diffFolder: duplicate capture key '${key}' ` +
+            `for '${p}' (already mapped '${diffMap.get(key)}'). Using last match.`
+          );
+        }
+        diffMap.set(key, p);
+      }
+
+      for (const [key, modPath] of modMap) {
+        const diffPath = diffMap.get(key);
+        if (diffPath !== undefined) {
+          if (shared.debug) {
+            outputChannel.appendLine(`[DEBUG] [${pairLabel}] matched key='${key}': mod='${modPath}' diff='${diffPath}'`);
+          }
+          matchedPairs.push([modPath, diffPath]);
+        } else {
+          outputChannel.appendLine(
+            `[WARN]  [${pairLabel}] modifiedFolder '${modPath}' has no matching ` +
+            `diffFolder for capture key '${key}'. Skipping.`
+          );
+        }
+      }
+      for (const [key, diffPath] of diffMap) {
+        if (!modMap.has(key)) {
+          outputChannel.appendLine(
+            `[WARN]  [${pairLabel}] diffFolder '${diffPath}' has no matching ` +
+            `modifiedFolder for capture key '${key}'. Skipping.`
+          );
+        }
+      }
+
+      if (matchedPairs.length === 0) {
+        outputChannel.appendLine(
+          `[WARN]  [${pairLabel}] No matching pairs after glob key matching ` +
+          `(mod: ${expandedMod.length} dir(s), diff: ${expandedDiff.length} dir(s)). Skipping pair.`
+        );
+        continue;
+      }
+      if (matchedPairs.length < Math.max(expandedMod.length, expandedDiff.length)) {
+        outputChannel.appendLine(
+          `[INFO]  [${pairLabel}] Glob key matching: ${matchedPairs.length} pair(s) activated ` +
+          `(mod: ${expandedMod.length} dir(s), diff: ${expandedDiff.length} dir(s)).`
+        );
+      }
     }
 
-    // Zip the expanded lists into individual WatcherConfig entries
-    for (let j = 0; j < expandedMod.length; j++) {
-      const subLabel = expandedMod.length > 1 ? `${pairLabel}[${j}]` : pairLabel;
+    // Produce a WatcherConfig for each matched pair.
+    for (let j = 0; j < matchedPairs.length; j++) {
+      const [modPath, diffPath] = matchedPairs[j];
+      const subLabel = matchedPairs.length > 1 ? `${pairLabel}[${j}]` : pairLabel;
       const pairData: ConfigData = {
         ...shared,
         originalFolder: resolvedOriginal,
-        modifiedFolder: expandedMod[j],
-        diffFolder:     expandedDiff[j],
+        modifiedFolder: modPath,
+        diffFolder:     diffPath,
         pathPrefix: pair.pathPrefix ?? '',
       };
       const wc = buildConfig(root, pairData, subLabel, source, outputChannel);
@@ -529,6 +625,64 @@ function segmentToRegex(segment: string): RegExp {
     .replace(/\*/g, '[^\\\\/]*')           // * → any chars except path separator
     .replace(/\?/g, '[^\\\\/]');           // ? → any single char except separator
   return new RegExp(`^${reStr}$`, process.platform === 'win32' ? 'i' : undefined);
+}
+
+// ─── Glob capture-key helpers ─────────────────────────────────────────────────
+
+/**
+ * Returns the static base directory of a glob pattern: all path segments
+ * before the first wildcard segment joined with the platform separator.
+ * Mirrors the same logic used in expandGlobDirs.
+ */
+function globStaticBase(pattern: string): string {
+  const parts = pattern.split(/[\\/]/);
+  let staticCount = 0;
+  for (let i = 0; i < parts.length; i++) {
+    if (hasGlobChars(parts[i])) break;
+    staticCount++;
+  }
+  if (staticCount === 0) {
+    return path.isAbsolute(pattern) ? path.parse(pattern).root : '.';
+  }
+  return parts.slice(0, staticCount).join(path.sep);
+}
+
+/**
+ * Returns the count of literal (non-wildcard) path segments that trail the
+ * last wildcard segment in a glob pattern.
+ * e.g. `**\/aiscripts.modified` → 1  (`aiscripts.modified`)
+ *      `mods\/*\/src`           → 1  (`src`)
+ *      `mods\/*\/a\/b`          → 2  (`a`, `b`)
+ *      `**`                     → 0
+ */
+function globLiteralSuffixCount(pattern: string): number {
+  const parts = pattern.split(/[\\/]/);
+  let lastWildcardIdx = -1;
+  for (let i = 0; i < parts.length; i++) {
+    if (hasGlobChars(parts[i])) lastWildcardIdx = i;
+  }
+  if (lastWildcardIdx === -1) return 0;
+  return parts.length - 1 - lastWildcardIdx;
+}
+
+/**
+ * Derives a "capture key" from an expanded path by:
+ *   1. Stripping `suffixPartCount` trailing path segments (the literal suffix
+ *      of the glob pattern after the last wildcard), and
+ *   2. Computing the path relative to `staticBase` (the literal prefix before
+ *      the first wildcard).
+ *
+ * This key represents only the portion matched by the wildcards themselves, so
+ * two paths produced by different glob patterns (e.g. `**\/aiscripts.modified`
+ * and `**\/aiscripts`) share the same key when they sit inside the same parent
+ * directory.
+ */
+function globCaptureKey(staticBase: string, expandedPath: string, suffixPartCount: number): string {
+  const parts = expandedPath.split(/[\\/]/);
+  const captureParts = suffixPartCount > 0 ? parts.slice(0, -suffixPartCount) : parts;
+  const capturePath = captureParts.join(path.sep) || staticBase;
+  const rel = path.relative(staticBase, capturePath);
+  return rel === '' ? '.' : rel;
 }
 
 /**
