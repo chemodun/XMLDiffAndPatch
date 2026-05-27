@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.1](https://github.com/chemodun/XMLDiffAndPatch/compare/xmldiffandpatch@v0.7.0...xmldiffandpatch@v0.7.1) (2026-05-27)
+
+
+### Code Refactoring
+
+* **watcher:** add BOM stripping for XML parsing and enhance error handling in patching ([8ccf001](https://github.com/chemodun/XMLDiffAndPatch/commit/8ccf0019686cda9d0f5183659bf4e9d7ba8a265b))
+
+
+### Miscellaneous Chores
+
+* **patchEngine:** log the number of operations to apply in applyPatch function ([b2f2111](https://github.com/chemodun/XMLDiffAndPatch/commit/b2f2111fa3f7c5d9505cf9d126bb5664ddce40a7))
+* **README:** update changelog for version 0.7.1 with bug fixes and improvements ([686a921](https://github.com/chemodun/XMLDiffAndPatch/commit/686a921d69ac3ba9f19c4d8c9b6f627cfd08d6a7))
+
 ## [0.7.0](https://github.com/chemodun/XMLDiffAndPatch/compare/xmldiffandpatch@v0.6.2...xmldiffandpatch@v0.7.0) (2026-05-27)
 
 
