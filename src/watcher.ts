@@ -66,6 +66,11 @@ function hasParseError(doc: Document): boolean {
   return false;
 }
 
+/** Strips a leading UTF-8 BOM (\uFEFF) so the XML parser sees a clean string. */
+function stripBom(s: string): string {
+  return s.charCodeAt(0) === 0xFEFF ? s.slice(1) : s;
+}
+
 /** Returns the path relative to `folder`, or null if the file is not under it. */
 function getRelativePath(filePath: string, folder: string): string | null {
   const rel = path.relative(folder, filePath);
@@ -290,8 +295,8 @@ export class WatcherManager {
       fs.readFile(modifiedPath, 'utf-8'),
     ]);
 
-    const originalDoc = this.parser.parseFromString(origContent, 'text/xml');
-    const modifiedDoc = this.parser.parseFromString(modContent, 'text/xml');
+    const originalDoc = this.parser.parseFromString(stripBom(origContent), 'text/xml');
+    const modifiedDoc = this.parser.parseFromString(stripBom(modContent), 'text/xml');
 
     if (hasParseError(modifiedDoc)) {
       this.logger.warn(`[Diff] Skipped: XML is malformed in '${modifiedPath}'`);
@@ -356,26 +361,51 @@ export class WatcherManager {
     outputPath: string
   ): Promise<void> {
     this.logger.info(`[Patch] '${diffPath}' → '${outputPath}'`);
+    this.logger.debug(`[Patch] original='${originalPath}'`);
 
-    const [origContent, diffContent] = await Promise.all([
-      fs.readFile(originalPath, 'utf-8'),
-      fs.readFile(diffPath, 'utf-8'),
-    ]);
+    let origContent: string;
+    let diffContent: string;
+    try {
+      [origContent, diffContent] = await Promise.all([
+        fs.readFile(originalPath, 'utf-8'),
+        fs.readFile(diffPath, 'utf-8'),
+      ]);
+      this.logger.debug(`[Patch] files read (orig=${origContent.length}B diff=${diffContent.length}B)`);
+    } catch (e) {
+      this.logger.error(`[Patch] file read failed: ${e}`);
+      throw e;
+    }
 
-    const originalDoc = this.parser.parseFromString(origContent, 'text/xml');
-    const diffDoc = this.parser.parseFromString(diffContent, 'text/xml');
+    const originalDoc = this.parser.parseFromString(stripBom(origContent), 'text/xml');
+    this.logger.debug(`[Patch] original parsed, root='${originalDoc.documentElement?.nodeName ?? 'null'}'`);
+
+    const diffDoc = this.parser.parseFromString(stripBom(diffContent), 'text/xml');
+    this.logger.debug(`[Patch] diff parsed, root='${diffDoc.documentElement?.nodeName ?? 'null'}'`);
+
+    if (hasParseError(originalDoc)) {
+      this.logger.warn(`[Patch] Skipped: XML is malformed in '${originalPath}'`);
+      return;
+    }
 
     if (hasParseError(diffDoc)) {
       this.logger.warn(`[Patch] Skipped: XML is malformed in '${diffPath}'`);
       return;
     }
 
+    const opCount = Array.from(diffDoc.documentElement?.childNodes ?? []).filter(
+      (n) => n.nodeType === 1
+    ).length;
+    this.logger.debug(`[Patch] ${opCount} operation(s) found in diff`);
+
     applyPatch(diffDoc, originalDoc, this.config.allowDoubles, this.logger);
+    this.logger.debug(`[Patch] applyPatch done, serializing`);
 
     const indentSize = detectIndentation(origContent);
     const output = serializeDocument(originalDoc, indentSize);
+    this.logger.debug(`[Patch] serialized (${output.length}B), writing to '${outputPath}'`);
 
     await this.writeOutput(outputPath, output);
+    this.logger.debug(`[Patch] writeOutput done`);
   }
 
   private async writeCopy(sourcePath: string, outputPath: string): Promise<void> {
@@ -559,7 +589,13 @@ export class WatcherManager {
       return false;
     }
     const modifiedPath = path.join(this.config.modifiedFolder, relPath);
-    await this.writePatch(originalPath, diffPath, modifiedPath);
+    try {
+      await this.writePatch(originalPath, diffPath, modifiedPath);
+    } catch (err) {
+      this.logger.error(`[ReconstructFromDiff] Failed for '${relPath}': ${err}`);
+      vscode.window.showErrorMessage(`XML Diff & Patch: Failed to reconstruct '${path.basename(relPath)}' — ${err}`);
+      return false;
+    }
     return true;
   }
 
@@ -578,7 +614,13 @@ export class WatcherManager {
       return false;
     }
     const diffPath = path.join(this.config.diffFolder, relPath);
-    await this.writeDiff(originalPath, modifiedPath, diffPath);
+    try {
+      await this.writeDiff(originalPath, modifiedPath, diffPath);
+    } catch (err) {
+      this.logger.error(`[RegenerateDiff] Failed for '${relPath}': ${err}`);
+      vscode.window.showErrorMessage(`XML Diff & Patch: Failed to regenerate diff for '${path.basename(relPath)}' — ${err}`);
+      return false;
+    }
     return true;
   }
 
