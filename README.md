@@ -141,10 +141,11 @@ Open the relevant `settings.json` (e.g. *Preferences: Open Workspace Settings (J
 | `emptyDiffBehavior` | `"delete"` | Action when diff produces no operations: `write`, `delete`, `warn`, or `warnDelete`. |
 | `onlyFullPath` | `false` | Always emit absolute XPath (no `//` shorthand). |
 | `useAllAttributes` | `false` | Include all attributes in XPath predicates, not just disambiguating ones. |
-| `ignoreDiffInAttribute` | `null` | Attribute name to ignore when comparing elements (e.g. `"version"`). |
+| `ignoreDiffInAttribute` | `""` | Attribute name to ignore when comparing elements (e.g. `"version"`). Leave empty to compare all attributes. |
+| `compactPath` | `false` | Compact XPath mode: skip adding attributes to a path step when the element name alone is unique; when it is not unique, prefer following child elements instead of adding attributes. |
+| `qualifiedPath` | `false` | Qualified XPath mode: always include at least the first attribute in every path step, even when the element name is already unique on its own. |
 | `xsdPath` | `"./diff.xsd"` | Path to an XSD schema for validating generated diff files. Relative paths resolve from workspace root. |
 | `validationFailBehavior` | `"warn"` | On schema validation failure: `warn` (write anyway), `error` (skip write), or `off` (disable validation). |
-| `showDiffEditorOnSave` | `false` | Open a side-by-side diff editor after generating a diff file. |
 | `allowDoubles` | `false` | Skip duplicate-element guard when applying `<add>` operations during patch. |
 | `debug` | `false` | Enable verbose debug logging in the output channel. |
 
@@ -200,6 +201,15 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 - Members of the [x4_modding discord channel](https://discord.com/channels/337098290917146624/502057640877228042) - for their answers, support, ideas, and inspiration!
 
 ## Changelog
+
+### [0.7.2] - 2026-05-27
+
+- Fixed
+  - `ignoreDiffInAttribute` can now be set via the VS Code settings UI. Previously, an incorrect type definition (`["string", "null"]`) prevented the settings editor from rendering a text input for it; it required manual `settings.json` editing. Now typed as `string` with an empty-string default (empty = disabled).
+- Added
+  - `compactPath` and `qualifiedPath` settings are now visible and editable in the VS Code settings UI. They already existed in the extension logic but were missing from the manifest, so the settings editor did not show them.
+- Removed
+  - `showDiffEditorOnSave` setting removed. It was never implemented and had no effect.
 
 ### [0.7.1] - 2026-05-27
 
