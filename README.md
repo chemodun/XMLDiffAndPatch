@@ -112,7 +112,7 @@ All settings are under the `xmlDiffAndPatch` namespace.
 
 #### Option 1: Settings Sidebar Panel (recommended)
 
-Open the *XML Diff and Patch* panel in the Explorer sidebar. It shows your folder pairs grouped by scope (User, Workspace, or per Folder). Use the **Add pair** button to create a new entry, fill in the fields, and click **Save**. Existing pairs can be edited in-place or removed with the **✕** button.
+Open the *XML Diff and Patch* panel in the Explorer sidebar. It shows your folder pairs grouped by scope (User or Workspace). Use the **Add pair** button to create a new entry, fill in the fields, and click **Save**. Existing pairs can be edited in-place or removed with the **✕** button.
 
 ![Sidebar Panel](https://raw.githubusercontent.com/chemodun/XMLDiffAndPatch/refs/heads/main/docs/images/sidebar_panel.png)
 
@@ -200,6 +200,17 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 - Members of the [x4_modding discord channel](https://discord.com/channels/337098290917146624/502057640877228042) - for their answers, support, ideas, and inspiration!
 
 ## Changelog
+
+### [0.7.0] - 2026-05-27
+
+- Fixed
+  - Unpaired deleted and inserted elements with different tag names now correctly produce a single `replace` operation instead of a separate `remove` + `add` pair.
+  - Elements with two or more differing attributes were incorrectly considered close-enough matches during diff pairing; attribute difference counting is now accurate.
+- Improved
+  - Folder pairs with glob patterns no longer require both sides to expand to the same number of directories. The extension now matches directories by the path segment captured by the wildcards, so only folders that have a counterpart on both sides are activated. Unmatched folders are skipped individually with a warning instead of blocking the whole pair.
+  - Generated `sel` XPath expressions use globally-unique `//` anchors where possible, producing shorter and more readable paths (unless `onlyFullPath` is enabled).
+  - Elements without their own attributes are now qualified using a child-existence predicate (e.g. `do_else[do_if[@value='...']]`) to avoid brittle numeric position indices, preferring the child that lies on the path to the target.
+  - When a single on-path child is enough to uniquely identify a parent element, the natural `parent/child[@attr]` form is used instead of the redundant `parent[child[@attr]]/child[@attr]` form.
 
 ### [0.6.2] - 2026-05-27
 
