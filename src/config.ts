@@ -32,6 +32,7 @@ interface ConfigData {
   onlyFullPath?: boolean;
   useAllAttributes?: boolean;
   ignoreDiffInAttribute?: string | null;
+  humanReadable?: boolean;
   reflectDiffToModified?: boolean;
   passOtherFiles?: boolean;
   showDiffEditorOnSave?: boolean;
@@ -190,6 +191,7 @@ async function readFromFolderSettings(
     onlyFullPath: cfg.get<boolean>('onlyFullPath') ?? false,
     useAllAttributes: cfg.get<boolean>('useAllAttributes') ?? false,
     ignoreDiffInAttribute: getInheritedString(cfg, 'ignoreDiffInAttribute') || null,
+    humanReadable: cfg.get<boolean>('humanReadable') ?? false,
     reflectDiffToModified: cfg.get<boolean>('reflectDiffToModified') ?? true,
     passOtherFiles: cfg.get<boolean>('passOtherFiles') ?? true,
     showDiffEditorOnSave: cfg.get<boolean>('showDiffEditorOnSave') ?? false,
@@ -220,6 +222,7 @@ async function readGlobalConfig(outputChannel: vscode.OutputChannel): Promise<Wa
     onlyFullPath: cfg.get<boolean>('onlyFullPath') ?? false,
     useAllAttributes: cfg.get<boolean>('useAllAttributes') ?? false,
     ignoreDiffInAttribute: getInheritedString(cfg, 'ignoreDiffInAttribute') || null,
+    humanReadable: cfg.get<boolean>('humanReadable') ?? false,
     reflectDiffToModified: cfg.get<boolean>('reflectDiffToModified') ?? true,
     passOtherFiles: cfg.get<boolean>('passOtherFiles') ?? true,
     showDiffEditorOnSave: cfg.get<boolean>('showDiffEditorOnSave') ?? false,
@@ -509,6 +512,7 @@ function buildConfig(
     onlyFullPath: data.onlyFullPath ?? false,
     useAllAttributes: data.useAllAttributes ?? false,
     ignoreDiffInAttribute: data.ignoreDiffInAttribute ?? null,
+    humanReadable: data.humanReadable ?? false,
     reflectDiffToModified: data.reflectDiffToModified ?? true,
     passOtherFiles: data.passOtherFiles ?? true,
     showDiffEditorOnSave: data.showDiffEditorOnSave ?? false,

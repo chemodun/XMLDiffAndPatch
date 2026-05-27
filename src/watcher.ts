@@ -302,6 +302,7 @@ export class WatcherManager {
       onlyFullPath: this.config.onlyFullPath,
       useAllAttributes: this.config.useAllAttributes,
       ignoreDiffInAttribute: this.config.ignoreDiffInAttribute,
+      humanReadable: this.config.humanReadable,
     };
 
     const engine = new DiffEngine(diffOptions, this.logger);
