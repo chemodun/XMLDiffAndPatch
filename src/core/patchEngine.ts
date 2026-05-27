@@ -34,6 +34,9 @@ export function applyPatch(
     return originalDoc;
   }
 
+  const opCount = Array.from(diffRoot.childNodes).filter((n) => n.nodeType === ELEMENT_NODE).length;
+  logger.debug(`applyPatch: ${opCount} operation(s) to apply`);
+
   let child = diffRoot.firstChild;
   while (child) {
     if (child.nodeType === ELEMENT_NODE) {
