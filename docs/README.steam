@@ -200,8 +200,18 @@ Open the relevant [b]settings.json[/b] (e.g. [i]Preferences: Open Workspace Sett
 [/list]
 [*] Setting: [b]ignoreDiffInAttribute[/b]
 [list]
-[*] Default: [b]null[/b]
-[*] Description: Attribute name to ignore when comparing elements (e.g. [b]"version"[/b]).
+[*] Default: [b]""[/b]
+[*] Description: Attribute name to ignore when comparing elements (e.g. [b]"version"[/b]). Leave empty to compare all attributes.
+[/list]
+[*] Setting: [b]compactPath[/b]
+[list]
+[*] Default: [b]false[/b]
+[*] Description: Compact XPath mode: skip adding attributes to a path step when the element name alone is unique; when it is not unique, prefer following child elements instead of adding attributes.
+[/list]
+[*] Setting: [b]qualifiedPath[/b]
+[list]
+[*] Default: [b]false[/b]
+[*] Description: Qualified XPath mode: always include at least the first attribute in every path step, even when the element name is already unique on its own.
 [/list]
 [*] Setting: [b]xsdPath[/b]
 [list]
@@ -212,11 +222,6 @@ Open the relevant [b]settings.json[/b] (e.g. [i]Preferences: Open Workspace Sett
 [list]
 [*] Default: [b]"warn"[/b]
 [*] Description: On schema validation failure: [b]warn[/b] (write anyway), [b]error[/b] (skip write), or [b]off[/b] (disable validation).
-[/list]
-[*] Setting: [b]showDiffEditorOnSave[/b]
-[list]
-[*] Default: [b]false[/b]
-[*] Description: Open a side-by-side diff editor after generating a diff file.
 [/list]
 [*] Setting: [b]allowDoubles[/b]
 [list]
@@ -306,6 +311,21 @@ This project is licensed under the Apache License 2.0 - see the [url=https://git
 [/list]
 [h2][b]Changelog[/b][/h2]
 
+[h2][0.7.2] - 2026-05-27[/h2]
+[list]
+[*] Fixed
+[list]
+[*] [b]ignoreDiffInAttribute[/b] can now be set via the VS Code settings UI. Previously, an incorrect type definition ([b]["string", "null"][/b]) prevented the settings editor from rendering a text input for it; it required manual [b]settings.json[/b] editing. Now typed as [b]string[/b] with an empty-string default (empty = disabled).
+[/list]
+[*] Added
+[list]
+[*] [b]compactPath[/b] and [b]qualifiedPath[/b] settings are now visible and editable in the VS Code settings UI. They already existed in the extension logic but were missing from the manifest, so the settings editor did not show them.
+[/list]
+[*] Removed
+[list]
+[*] [b]showDiffEditorOnSave[/b] setting removed. It was never implemented and had no effect.
+[/list]
+[/list]
 [h2][0.7.1] - 2026-05-27[/h2]
 [list]
 [*] Fixed
