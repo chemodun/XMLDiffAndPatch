@@ -1,6 +1,7 @@
 /**
  * Sidebar webview panel for managing xmlDiffAndPatch.folderPairs
- * at all settings scopes (User, Workspace, per-folder).
+ * at all settings scopes (User, Workspace).
+ * Note: folderPairs does not support the folder resource scope.
  */
 import * as crypto from 'crypto';
 import * as vscode from 'vscode';
@@ -13,7 +14,7 @@ interface FolderPairRaw {
 
 interface ScopeData {
   label: string;
-  /** 'global' | 'workspace' | 'folder:<folderName>' */
+  /** 'global' | 'workspace' */
   target: string;
   pairs: FolderPairRaw[];
 }
@@ -77,17 +78,6 @@ export class SettingsPanelProvider implements vscode.WebviewViewProvider {
       scopes.push({ label: 'Workspace', target: 'workspace', pairs: ins?.workspaceValue ?? [] });
     }
 
-    for (const folder of vscode.workspace.workspaceFolders ?? []) {
-      const fi = vscode.workspace
-        .getConfiguration('xmlDiffAndPatch', folder.uri)
-        .inspect<FolderPairRaw[]>('folderPairs');
-      scopes.push({
-        label: folder.name,
-        target: `folder:${folder.name}`,
-        pairs: fi?.workspaceFolderValue ?? [],
-      });
-    }
-
     return scopes;
   }
 
@@ -113,13 +103,6 @@ export class SettingsPanelProvider implements vscode.WebviewViewProvider {
       } else if (target === 'workspace') {
         const cfg = vscode.workspace.getConfiguration('xmlDiffAndPatch');
         await cfg.update('folderPairs', value, vscode.ConfigurationTarget.Workspace);
-      } else if (target.startsWith('folder:')) {
-        const name = target.slice(7);
-        const folder = vscode.workspace.workspaceFolders?.find(f => f.name === name);
-        if (folder) {
-          const cfg = vscode.workspace.getConfiguration('xmlDiffAndPatch', folder.uri);
-          await cfg.update('folderPairs', value, vscode.ConfigurationTarget.WorkspaceFolder);
-        }
       }
       this._outputChannel.appendLine(
         `[INFO]  [settingsPanel] Saved folderPairs for scope: ${target}`
