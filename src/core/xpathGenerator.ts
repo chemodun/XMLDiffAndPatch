@@ -84,24 +84,40 @@ export function getElementPathStep(
   const localName = element.localName ?? element.nodeName;
   let pathForParent = localName;
 
-  // Check uniqueness with name only first
-  if (isUniqueInParent(pathForParent, element, parent)) {
-    if (options.humanReadable) {
-      const fa = element.attributes?.[0];
-      if (fa) {
-        const humanStep = pathForParent + attributeToXpathElement(fa);
-        return tryGlobalUnique(humanStep, element, doc);
-      }
-    }
-    return tryGlobalUnique(pathForParent, element, doc);
-  }
-
   const firstAttr = element.attributes?.[0] ?? null;
   if (!firstAttr) {
-    // No own attributes — try qualifying by a direct child element predicate before giving up
+    // No attributes: name-only uniqueness check, then child predicate fallback
+    if (isUniqueInParent(pathForParent, element, parent)) {
+      return tryGlobalUnique(pathForParent, element, doc);
+    }
     const noAttrResult = tryChildPredicateStep(element, parent, pathForParent, doc, onPathChild);
     if (noAttrResult !== null) return noAttrResult;
     return { step: '', pathForParent };
+  }
+
+  const nameAloneUnique = isUniqueInParent(pathForParent, element, parent);
+
+  // Default: name alone sufficient — no attributes needed.
+  // Qualified path: always include at least the first attribute, so skip this return.
+  if (!options.qualifiedPath && nameAloneUnique) {
+    return tryGlobalUnique(pathForParent, element, doc);
+  }
+
+  // Compact path: when name is NOT unique, prefer continuing through the on-path child
+  // over adding attributes at this level.
+  if (options.compactPath && !nameAloneUnique && onPathChild !== null && onPathChild.parentNode === element) {
+    let cp = onPathChild.localName ?? onPathChild.nodeName;
+    if (isUniqueByChildPredicate(localName, cp, element, parent)) {
+      return { step: localName, pathForParent: localName };
+    }
+    if (onPathChild.attributes) {
+      for (let i = 0; i < onPathChild.attributes.length; i++) {
+        cp += attributeToXpathElement(onPathChild.attributes[i]);
+        if (isUniqueByChildPredicate(localName, cp, element, parent)) {
+          return { step: localName, pathForParent: localName };
+        }
+      }
+    }
   }
 
   pathForParent += attributeToXpathElement(firstAttr);

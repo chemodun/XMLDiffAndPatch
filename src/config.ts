@@ -32,10 +32,10 @@ interface ConfigData {
   onlyFullPath?: boolean;
   useAllAttributes?: boolean;
   ignoreDiffInAttribute?: string | null;
-  humanReadable?: boolean;
+  compactPath?: boolean;
+  qualifiedPath?: boolean;
   reflectDiffToModified?: boolean;
   passOtherFiles?: boolean;
-  showDiffEditorOnSave?: boolean;
   allowDoubles?: boolean;
   watchMode?: 'onSave' | 'onTheFly' | 'contextMenuOnly';
   debounceMs?: number;
@@ -191,10 +191,10 @@ async function readFromFolderSettings(
     onlyFullPath: cfg.get<boolean>('onlyFullPath') ?? false,
     useAllAttributes: cfg.get<boolean>('useAllAttributes') ?? false,
     ignoreDiffInAttribute: getInheritedString(cfg, 'ignoreDiffInAttribute') || null,
-    humanReadable: cfg.get<boolean>('humanReadable') ?? false,
+    compactPath: cfg.get<boolean>('compactPath') ?? false,
+    qualifiedPath: cfg.get<boolean>('qualifiedPath') ?? false,
     reflectDiffToModified: cfg.get<boolean>('reflectDiffToModified') ?? true,
     passOtherFiles: cfg.get<boolean>('passOtherFiles') ?? true,
-    showDiffEditorOnSave: cfg.get<boolean>('showDiffEditorOnSave') ?? false,
     allowDoubles: cfg.get<boolean>('allowDoubles') ?? false,
     watchMode: cfg.get<'onSave' | 'onTheFly' | 'contextMenuOnly'>('watchMode') ?? 'onSave',
     debounceMs: cfg.get<number>('debounceMs') ?? 500,
@@ -222,10 +222,10 @@ async function readGlobalConfig(outputChannel: vscode.OutputChannel): Promise<Wa
     onlyFullPath: cfg.get<boolean>('onlyFullPath') ?? false,
     useAllAttributes: cfg.get<boolean>('useAllAttributes') ?? false,
     ignoreDiffInAttribute: getInheritedString(cfg, 'ignoreDiffInAttribute') || null,
-    humanReadable: cfg.get<boolean>('humanReadable') ?? false,
+    compactPath: cfg.get<boolean>('compactPath') ?? false,
+    qualifiedPath: cfg.get<boolean>('qualifiedPath') ?? false,
     reflectDiffToModified: cfg.get<boolean>('reflectDiffToModified') ?? true,
     passOtherFiles: cfg.get<boolean>('passOtherFiles') ?? true,
-    showDiffEditorOnSave: cfg.get<boolean>('showDiffEditorOnSave') ?? false,
     allowDoubles: cfg.get<boolean>('allowDoubles') ?? false,
     watchMode: cfg.get<'onSave' | 'onTheFly' | 'contextMenuOnly'>('watchMode') ?? 'onSave',
     debounceMs: cfg.get<number>('debounceMs') ?? 500,
@@ -512,10 +512,10 @@ function buildConfig(
     onlyFullPath: data.onlyFullPath ?? false,
     useAllAttributes: data.useAllAttributes ?? false,
     ignoreDiffInAttribute: data.ignoreDiffInAttribute ?? null,
-    humanReadable: data.humanReadable ?? false,
+    compactPath: data.compactPath ?? false,
+    qualifiedPath: data.qualifiedPath ?? false,
     reflectDiffToModified: data.reflectDiffToModified ?? true,
     passOtherFiles: data.passOtherFiles ?? true,
-    showDiffEditorOnSave: data.showDiffEditorOnSave ?? false,
     allowDoubles: data.allowDoubles ?? false,
     watchMode: data.watchMode ?? 'onSave',
     debounceMs: data.debounceMs ?? 500,

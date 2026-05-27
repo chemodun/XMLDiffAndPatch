@@ -17,8 +17,10 @@ export interface DiffOptions {
   useAllAttributes: boolean;
   /** Attribute name to ignore when comparing elements. null = compare all attributes. */
   ignoreDiffInAttribute: string | null;
-  /** When true, always include at least the first attribute in XPath steps even when the element name alone is sufficient for uniqueness. */
-  humanReadable: boolean;
+  /** When true, skip adding attributes to a path step when name alone is unique; when name is not unique, prefer child-path continuation over attributes. */
+  compactPath: boolean;
+  /** When true, always include at least the first attribute in XPath steps even when name alone is sufficient. */
+  qualifiedPath: boolean;
 }
 
 /** Resolved and validated watcher configuration (derived from VS Code settings or disk file). */
@@ -31,11 +33,12 @@ export interface WatcherConfig {
   onlyFullPath: boolean;
   useAllAttributes: boolean;
   ignoreDiffInAttribute: string | null;
-  /** When true, always include at least the first attribute in XPath steps for readability, even when the name alone is sufficient. */
-  humanReadable: boolean;
+  /** When true, skip adding attributes when name alone is unique; prefer child-path continuation when name is not unique. */
+  compactPath: boolean;
+  /** When true, always include at least the first attribute even when name alone is sufficient. */
+  qualifiedPath: boolean;
   reflectDiffToModified: boolean;
   passOtherFiles: boolean;
-  showDiffEditorOnSave: boolean;
   allowDoubles: boolean;
   watchMode: 'onSave' | 'onTheFly' | 'contextMenuOnly';
   debounceMs: number;
