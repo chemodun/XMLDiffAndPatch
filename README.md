@@ -72,19 +72,32 @@ output    → modifiedFolder / <relPath>
 
 For example, if `originalFolder` is `C:\X4\data`, `pathPrefix` is `libraries`, and you save `{modifiedFolder}\ships\ship_xl.xml` (relPath = `ships\ship_xl.xml`), the extension looks up `C:\X4\data\libraries\ships\ship_xl.xml` as the baseline and writes the diff to `{diffFolder}\ships\ship_xl.xml`.
 
-#### Glob zipping
+#### Glob matching
 
-A glob in either field *multiplies* the pair: each expanded directory becomes a separate watcher instance. Both lists are sorted alphabetically after expansion and then zipped index-by-index, so they must expand to the same count. If they differ, the extension cannot determine the correct correspondence and skips the whole pair with a warning.
+A glob in `modifiedFolder` or `diffFolder` *multiplies* the pair: each expanded directory becomes a separate watcher instance. The two expansion lists are matched by a **capture key** — the path segment(s) covered by the wildcards, with the static prefix before the first wildcard and the literal suffix after the last wildcard both stripped before comparison. Only entries whose capture keys appear on both sides are activated; unmatched entries are each skipped with a per-entry warning.
 
-The typical pattern is a parallel directory structure where the same wildcard produces matching results in both fields:
+**Symmetric case** — the most common pattern, where the same wildcard produces matching results on both sides:
 
 ```json
 { "modifiedFolder": "mods/*/src", "diffFolder": "mods/*/diff" }
 ```
 
-`mods/*/src` → `[mods/modA/src, mods/modB/src]`
-`mods/*/diff` → `[mods/modA/diff, mods/modB/diff]`
-Result: `modA/src ↔ modA/diff`, `modB/src ↔ modB/diff`
+```
+mods/*/src  →  [mods/modA/src,  mods/modB/src ]   capture keys: modA, modB
+mods/*/diff →  [mods/modA/diff, mods/modB/diff]   capture keys: modA, modB
+
+Activated: modA/src ↔ modA/diff,  modB/src ↔ modB/diff
+```
+
+**Asymmetric case** — the two sides expand to a different number of directories:
+
+```json
+{ "modifiedFolder": "**/aiscripts.modified", "diffFolder": "**/aiscripts" }
+```
+
+The capture key for both patterns is the *parent* directory (the segment matched by `**`). If `aiscripts.modified` exists under 4 parent folders but `aiscripts` only under 2, only the 2 matching parents are activated; the other 2 `aiscripts.modified` folders are each skipped with a warning. Both sides do **not** need to expand to the same count.
+
+`originalFolder` also accepts globs: when multiple directories match, the first alphabetical result is used and a warning is logged for the rest.
 
 Multiple pairs share the same `originalFolder` (and all other scalar settings). This lets you handle several mod directories in one workspace configuration.
 
