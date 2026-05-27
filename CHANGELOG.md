@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.7.0](https://github.com/chemodun/XMLDiffAndPatch/compare/xmldiffandpatch@v0.6.2...xmldiffandpatch@v0.7.0) (2026-05-27)
+
+
+### Features
+
+* **config:** add humanReadable option to enhance XPath readability ([d533a1a](https://github.com/chemodun/XMLDiffAndPatch/commit/d533a1af411445370c5a543b498d8e730d40b761))
+
+
+### Code Refactoring
+
+* **config:** enhance folder pairing logic with capture key matching for glob patterns ([ec65999](https://github.com/chemodun/XMLDiffAndPatch/commit/ec659992562e63895d5cc8cb88f475e9a067fb61))
+* **diffEngine:** enhance handling of unpaired deletes and inserts with positional replacements ([e4fb55f](https://github.com/chemodun/XMLDiffAndPatch/commit/e4fb55f9a61bc6027a9411196991d0a676fba9f8))
+* **diffEngine:** simplify compareElements method by removing checkOnly logic ([7268f59](https://github.com/chemodun/XMLDiffAndPatch/commit/7268f59ae2de6ddbac3f49d56ba6a1487259c3e8))
+* **settingsPanel:** remove folder resource scope support from folderPairs management ([4ff9bc5](https://github.com/chemodun/XMLDiffAndPatch/commit/4ff9bc567821e1f5e87d176ba1176ca6a514dc15))
+* **xpathGenerator:** enhance XPath generation with child-predicate qualification for uniqueness ([cd00772](https://github.com/chemodun/XMLDiffAndPatch/commit/cd007724a4bd7691cdccb46d866ea75e35dd7a50))
+
+
+### Miscellaneous Chores
+
+* **README:** update settings sidebar instructions and add changelog for upcoming release ([162332b](https://github.com/chemodun/XMLDiffAndPatch/commit/162332b1a473a1e02e108b9f4830e617c0d7f0e3))
+
 ## [0.6.2](https://github.com/chemodun/XMLDiffAndPatch/compare/xmldiffandpatch@v0.6.1...xmldiffandpatch@v0.6.2) (2026-05-26)
 
 
