@@ -201,6 +201,13 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 ## Changelog
 
+### [0.7.1] - 2026-05-27
+
+- Fixed
+  - XML files with a UTF-8 BOM are now handled correctly. A BOM before the `<?xml` declaration no longer causes a parse failure or silently aborts the diff/patch operation.
+  - Errors from the *Reconstruct from Diff* and *Regenerate Diff* context menu commands are now shown as a notification instead of being silently swallowed.
+  - Settings sidebar no longer offers per-folder scope for `folderPairs`, which is not supported and previously caused a save error.
+
 ### [0.7.0] - 2026-05-27
 
 - Fixed
