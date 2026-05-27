@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.7.2](https://github.com/chemodun/XMLDiffAndPatch/compare/xmldiffandpatch@v0.7.1...xmldiffandpatch@v0.7.2) (2026-05-27)
+
+
+### Code Refactoring
+
+* **config:** replace humanReadable with compactPath and qualifiedPath options ([a0487f5](https://github.com/chemodun/XMLDiffAndPatch/commit/a0487f5d9c95c3bbd1f7cf893552742120306ea6))
+* **settings:** enhance XML comparison options with compactPath and qualifiedPath ([9e90fad](https://github.com/chemodun/XMLDiffAndPatch/commit/9e90fadb747534f570469133225c25294d692ef6))
+
+
+### Documentation
+
+* **bbcode:** Update bbcode files ([18cb39a](https://github.com/chemodun/XMLDiffAndPatch/commit/18cb39a6cc0606be2735aa781822e8bfce5447cb))
+* **README:** clarify glob matching behavior in folder pair configuration ([771e552](https://github.com/chemodun/XMLDiffAndPatch/commit/771e55233c55d2b2ffd4e93b6f6293033a1f4933))
+* **README:** update settings for ignoreDiffInAttribute, add compactPath and qualifiedPath options, and remove showDiffEditorOnSave ([aeb338c](https://github.com/chemodun/XMLDiffAndPatch/commit/aeb338c1785fa5b0efd8dda5068c459d760c51dc))
+
 ## [0.7.1](https://github.com/chemodun/XMLDiffAndPatch/compare/xmldiffandpatch@v0.7.0...xmldiffandpatch@v0.7.1) (2026-05-27)
 
 
