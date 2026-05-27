@@ -83,19 +83,32 @@ output    → modifiedFolder / <relPath>
 
 For example, if [b]originalFolder[/b] is [b]C:\X4\data[/b], [b]pathPrefix[/b] is [b]libraries[/b], and you save [b]{modifiedFolder}\ships\ship_xl.xml[/b] (relPath = [b]ships\ship_xl.xml[/b]), the extension looks up [b]C:\X4\data\libraries\ships\ship_xl.xml[/b] as the baseline and writes the diff to [b]{diffFolder}\ships\ship_xl.xml[/b].
 
-[size=3][u]Glob zipping[/u][/size]
+[size=3][u]Glob matching[/u][/size]
 
-A glob in either field [i]multiplies[/i] the pair: each expanded directory becomes a separate watcher instance. Both lists are sorted alphabetically after expansion and then zipped index-by-index, so they must expand to the same count. If they differ, the extension cannot determine the correct correspondence and skips the whole pair with a warning.
+A glob in [b]modifiedFolder[/b] or [b]diffFolder[/b] [i]multiplies[/i] the pair: each expanded directory becomes a separate watcher instance. The two expansion lists are matched by a [b]capture key[/b] — the path segment(s) covered by the wildcards, with the static prefix before the first wildcard and the literal suffix after the last wildcard both stripped before comparison. Only entries whose capture keys appear on both sides are activated; unmatched entries are each skipped with a per-entry warning.
 
-The typical pattern is a parallel directory structure where the same wildcard produces matching results in both fields:
+[b]Symmetric case[/b] — the most common pattern, where the same wildcard produces matching results on both sides:
 
 [code]
 { "modifiedFolder": "mods/*/src", "diffFolder": "mods/*/diff" }
 [/code]
 
-[b]mods/*/src[/b] → [b][mods/modA/src, mods/modB/src][/b]
-[b]mods/*/diff[/b] → [b][mods/modA/diff, mods/modB/diff][/b]
-Result: [b]modA/src ↔ modA/diff[/b], [b]modB/src ↔ modB/diff[/b]
+[code]
+mods/*/src  →  [mods/modA/src,  mods/modB/src ]   capture keys: modA, modB
+mods/*/diff →  [mods/modA/diff, mods/modB/diff]   capture keys: modA, modB
+
+Activated: modA/src ↔ modA/diff,  modB/src ↔ modB/diff
+[/code]
+
+[b]Asymmetric case[/b] — the two sides expand to a different number of directories:
+
+[code]
+{ "modifiedFolder": "[b]/aiscripts.modified", "diffFolder": "[/b]/aiscripts" }
+[/code]
+
+The capture key for both patterns is the [i]parent[/i] directory (the segment matched by [b][b][/b]). If [b]aiscripts.modified[/b] exists under 4 parent folders but [b]aiscripts[/b] only under 2, only the 2 matching parents are activated; the other 2 [b]aiscripts.modified[/b] folders are each skipped with a warning. Both sides do [/b]not** need to expand to the same count.
+
+[b]originalFolder[/b] also accepts globs: when multiple directories match, the first alphabetical result is used and a warning is logged for the rest.
 
 Multiple pairs share the same [b]originalFolder[/b] (and all other scalar settings). This lets you handle several mod directories in one workspace configuration.
 
