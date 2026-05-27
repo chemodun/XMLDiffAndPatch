@@ -146,12 +146,19 @@
           "description": "If true, include all attributes in XPath predicates regardless of uniqueness."
         },
         "xmlDiffAndPatch.ignoreDiffInAttribute": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null,
-          "description": "Attribute name to ignore when comparing elements (e.g. 'version'). null = no attribute ignored."
+          "type": "string",
+          "default": "",
+          "description": "Attribute name to ignore when comparing elements (e.g. 'version'). Leave empty to compare all attributes."
+        },
+        "xmlDiffAndPatch.compactPath": {
+          "type": "boolean",
+          "default": false,
+          "description": "Compact XPath mode: skip adding attributes to a path step when the element name alone is unique; when it is not unique, prefer following child elements instead of adding attributes."
+        },
+        "xmlDiffAndPatch.qualifiedPath": {
+          "type": "boolean",
+          "default": false,
+          "description": "Qualified XPath mode: always include at least the first attribute in every path step, even when the element name is already unique on its own."
         },
         "xmlDiffAndPatch.reflectDiffToModified": {
           "type": "boolean",
@@ -162,11 +169,6 @@
           "type": "boolean",
           "default": true,
           "description": "If true (default), files not found in originalFolder by relative path are copied as-is to the output folder."
-        },
-        "xmlDiffAndPatch.showDiffEditorOnSave": {
-          "type": "boolean",
-          "default": false,
-          "description": "If true, open a side-by-side diff editor after generating a diff file. (v0.2 feature)"
         },
         "xmlDiffAndPatch.allowDoubles": {
           "type": "boolean",
