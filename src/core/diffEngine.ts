@@ -56,22 +56,18 @@ export class DiffEngine {
     modified: Document,
     diffRoot: Element,
     originalElem: Element | null = null,
-    modifiedElem: Element | null = null,
-    checkOnly = false
-  ): boolean {
+    modifiedElem: Element | null = null
+  ): void {
     // ── Step 1: element-level comparison ──────────────────────────────────────
     if (originalElem && modifiedElem) {
       if (originalElem.localName !== modifiedElem.localName) {
-        return true; // name mismatch — only valid in checkOnly context
+        return;
       }
 
       const origText = getTextValue(originalElem).trim();
       const modText = getTextValue(modifiedElem).trim();
 
       if (origText !== modText) {
-        if (checkOnly) {
-          return true;
-        }
 
         const xp = generateXPath(originalElem, this.options);
         if (modText) {
@@ -96,7 +92,7 @@ export class DiffEngine {
     const modifiedChildren = getChildElements(modEl);
 
     // ── Step 3: root attribute comparison (only at actual document roots) ──────
-    if (!checkOnly && !originalElem) {
+    if (!originalElem) {
       const { savedOp: rootSavedOp } = this.compareAttributes(
         original.documentElement!,
         modified.documentElement!,
@@ -105,21 +101,6 @@ export class DiffEngine {
       if (rootSavedOp) {
         this.diffRootAddOperation(diffRoot, rootSavedOp);
       }
-    }
-
-    // ── Step 4: early exit in checkOnly when children counts differ ───────────
-    if (checkOnly && originalChildren.length !== modifiedChildren.length) {
-      return true;
-    }
-
-    // ── Step 5: LCS-based child comparison ──────────────────────────────────
-    if (checkOnly) {
-      const len = Math.min(originalChildren.length, modifiedChildren.length);
-      for (let ci = 0; ci < len; ci++) {
-        if (!exactlyMatches(originalChildren[ci], modifiedChildren[ci])) return true;
-        if (this.compareElements(original, modified, diffRoot, originalChildren[ci], modifiedChildren[ci], true)) return true;
-      }
-      return false;
     }
 
     const editSteps = computeDiff(originalChildren, modifiedChildren);
@@ -131,7 +112,7 @@ export class DiffEngine {
 
       if (step.op === 'equal') {
         this.compareElements(original, modified, diffRoot,
-          originalChildren[step.indexA], modifiedChildren[step.indexB], false);
+          originalChildren[step.indexA], modifiedChildren[step.indexB]);
         s++;
       } else {
         const deletes: number[] = [];
@@ -150,7 +131,6 @@ export class DiffEngine {
       }
     }
 
-    return false;
   }
 
   // ─── LCS edit block processor ─────────────────────────────────────────────
@@ -213,7 +193,7 @@ export class DiffEngine {
           // Attribute was renamed — XPath identity changed, treat as unavailable for pos="after" anchoring
           lastRemovedOrReplaced = Math.max(lastRemovedOrReplaced, origIdx);
         }
-        this.compareElements(original, modified, diffRoot, origElem, modElem, false);
+        this.compareElements(original, modified, diffRoot, origElem, modElem);
       } else {
         const xpath = generateXPath(origElem, this.options);
         const replaceOp = this.createElement('replace');
@@ -351,14 +331,12 @@ export class DiffEngine {
           continue;
         }
         if (!modifiedAttrs.has(key)) {
-          if (checkOnly) {
-            return { matchedEnough: true, savedOp: null }; // has diff but ≤1 total
-          }
           differencesCount++;
           if (differencesCount > 1) {
             matchedEnough = false;
             break;
           }
+          if (checkOnly) continue;
           const xp = generateXPath(originalElement, this.options);
           savedOp = this.createElement('remove');
           savedOp.setAttribute('sel', `${xp}/@${key}`);
@@ -366,10 +344,11 @@ export class DiffEngine {
       }
     }
 
+    if (checkOnly) {
+      return { matchedEnough, savedOp: null };
+    }
+
     if (matchedEnough && differencesCount === 1) {
-      if (checkOnly) {
-        return { matchedEnough: true, savedOp: null };
-      }
       return { matchedEnough: true, savedOp };
     }
 
