@@ -225,8 +225,26 @@ export class DiffEngine {
       }
     }
 
-    // Emit unpaired removes
-    for (const origIdx of unpairedDeletes) {
+    // Positionally pair remaining deletes and inserts as <replace> operations.
+    // Even though element names differ (same-name pairing skipped them), if both sides
+    // have the same count they are 1:1 positional replacements. If counts differ,
+    // pair as many as possible and leave the surplus as remove/add.
+    const replacePairCount = Math.min(unpairedDeletes.length, unpairedInserts.length);
+    for (let pi = 0; pi < replacePairCount; pi++) {
+      const origIdx = unpairedDeletes[pi];
+      const modIdx  = unpairedInserts[pi];
+      const xpath = generateXPath(originalChildren[origIdx], this.options);
+      const replaceOp = this.createElement('replace');
+      replaceOp.setAttribute('sel', xpath);
+      replaceOp.appendChild(modifiedChildren[modIdx].cloneNode(true) as Element);
+      this.diffRootAddOperation(diffRoot, replaceOp);
+      this.logger.info(`[Operation replace] ${xpath}`);
+      lastRemovedOrReplaced = Math.max(lastRemovedOrReplaced, origIdx);
+    }
+
+    // Emit any surplus removes (when deletes > inserts)
+    for (let di = replacePairCount; di < unpairedDeletes.length; di++) {
+      const origIdx = unpairedDeletes[di];
       const xpath = generateXPath(originalChildren[origIdx], this.options);
       const removeOp = this.createElement('remove');
       removeOp.setAttribute('sel', xpath);
@@ -235,10 +253,11 @@ export class DiffEngine {
       lastRemovedOrReplaced = origIdx;
     }
 
-    // Emit unpaired inserts as a single batched <add>
-    if (unpairedInserts.length > 0) {
-      const j = unpairedInserts[0];
-      const k = unpairedInserts[unpairedInserts.length - 1] + 1;
+    // Emit any surplus inserts (when inserts > deletes) as a batched <add>
+    const remainingInserts = unpairedInserts.slice(replacePairCount);
+    if (remainingInserts.length > 0) {
+      const j = remainingInserts[0];
+      const k = remainingInserts[remainingInserts.length - 1] + 1;
 
       // Any element touched (removed OR paired/renamed) may have a stale XPath as pos="after" anchor.
       // Use the highest touched original index so buildAddOperation can switch to pos="before".
@@ -252,7 +271,7 @@ export class DiffEngine {
         nextOrigIdx, j, k, maxBlockOrigIdx
       );
       this.diffRootAddOperation(diffRoot, addOp);
-      this.logger.info(`[Operation add] ${unpairedInserts.length} element(s)`);
+      this.logger.info(`[Operation add] ${remainingInserts.length} element(s)`);
     }
 
     return lastRemovedOrReplaced;
